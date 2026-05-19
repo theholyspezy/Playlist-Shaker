@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self';
+             script-src 'self';
+             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+             font-src 'self' https://fonts.gstatic.com;
+             img-src 'self' https: data: blob:;
+             connect-src 'self'">
+  <title>Party Shaker 2000</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Custom Title Bar (drag region) -->
+  <div class="title-bar" id="titleBar">
+    <div class="title-bar-logo">
+      <span class="tb-icon">🎵</span>
+      <span class="tb-title rainbow-text">PARTY SHAKER 2000</span>
+    </div>
+    <div class="title-bar-controls">
+      <button class="tb-btn" id="btnMinimize" title="Minimieren">—</button>
+      <button class="tb-btn" id="btnMaximize" title="Maximieren">⬜</button>
+      <button class="tb-btn tb-close" id="btnClose" title="Schließen">✕</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- SETUP SCREEN -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="setupScreen" class="screen hidden">
+    <div class="center-card">
+      <div class="card-glow-border">
+        <div class="setup-logo">🎉</div>
+        <h1 class="card-title">PARTY SHAKER 2000</h1>
+        <p class="card-subtitle">First Time Setup</p>
+
+        <div class="setup-steps">
+          <div class="step">
+            <span class="step-num">1</span>
+            <span>Gehe zu <span class="link-text">developer.spotify.com/dashboard</span></span>
+          </div>
+          <div class="step">
+            <span class="step-num">2</span>
+            <span>Erstelle eine neue App (kostenlos)</span>
+          </div>
+          <div class="step">
+            <span class="step-num">3</span>
+            <span>Füge diese Redirect URI hinzu:<br>
+              <span class="code-text">http://localhost:8888/callback</span>
+            </span>
+          </div>
+          <div class="step">
+            <span class="step-num">4</span>
+            <span>Kopiere deine <strong>Client ID</strong> unten ein</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <input type="text" id="clientIdInput"
+            class="neon-input"
+            placeholder="Spotify Client ID eingeben...">
+          <button id="saveClientIdBtn" class="neon-btn primary full-width">
+            SPEICHERN &amp; WEITER →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- LOGIN SCREEN -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="loginScreen" class="screen hidden">
+    <div class="center-card">
+      <div class="card-glow-border">
+        <div class="login-logo">🎵</div>
+        <h1 class="card-title">PARTY SHAKER</h1>
+        <div class="card-title-sub">2000</div>
+        <p class="card-subtitle">The Ultimate Party Playlist Manager</p>
+        <div class="login-stars">★ ★ ★ ★ ★</div>
+        <button id="loginBtn" class="neon-btn spotify big-btn">
+          <span class="btn-icon">🎧</span>
+          MIT SPOTIFY EINLOGGEN
+        </button>
+        <button id="changeClientIdBtn" class="neon-btn ghost small-btn">
+          Client ID ändern
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- MAIN APP -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="mainApp" class="screen hidden">
+
+    <!-- Top Bar: user info + admin -->
+    <div class="top-bar">
+      <div class="user-info">
+        <img id="userAvatar" class="user-avatar" src="" alt="" onerror="this.style.display='none'">
+        <span id="userName" class="user-name">Loading...</span>
+      </div>
+      <div class="top-actions">
+        <span id="adminBadge" class="admin-badge hidden">👑 ADMIN</span>
+        <button id="adminToggleBtn" class="neon-btn secondary small-btn">👑 ADMIN</button>
+        <button id="logoutBtn" class="neon-btn danger small-btn">LOGOUT</button>
+      </div>
+    </div>
+
+    <!-- ─── PLAYER SECTION ─── -->
+    <div class="player-section">
+
+      <!-- Album Art -->
+      <div class="album-art-wrap">
+        <img id="albumArt" class="album-art hidden" src="" alt="Album Art">
+        <div id="albumArtPlaceholder" class="album-placeholder">
+          <span class="placeholder-disc">💿</span>
+        </div>
+      </div>
+
+      <!-- Player Display & Controls -->
+      <div class="player-main">
+
+        <!-- LCD Display -->
+        <div class="lcd-display">
+          <div class="lcd-label">◄◄ NOW PLAYING ►►</div>
+          <div class="lcd-track-wrap">
+            <div id="lcdTrackScroll" class="lcd-track-scroll">
+              <span id="lcdTrackText">No track playing</span>
+            </div>
+          </div>
+          <div id="lcdArtist" class="lcd-artist">Connect Spotify to start ♪</div>
+          <div class="lcd-time-row">
+            <span id="lcdCurrentTime" class="lcd-time">0:00</span>
+            <div class="lcd-time-bar">
+              <div id="lcdTimeFill" class="lcd-time-fill" style="width:0%"></div>
+            </div>
+            <span id="lcdTotalTime" class="lcd-time">0:00</span>
+          </div>
+        </div>
+
+        <!-- Equalizer -->
+        <div class="equalizer-wrap">
+          <div id="equalizer" class="equalizer"></div>
+        </div>
+
+        <!-- Controls -->
+        <div class="player-controls">
+          <button id="prevBtn" class="ctrl-btn" title="Vorheriger Titel">⏮</button>
+          <button id="playPauseBtn" class="ctrl-btn play-btn" title="Play/Pause">▶</button>
+          <button id="nextBtn" class="ctrl-btn" title="Nächster Titel">⏭</button>
+          <div class="volume-wrap">
+            <span class="vol-icon" id="volIcon">🔊</span>
+            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70">
+            <span id="volValue" class="vol-value">70</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── SEARCH SECTION ─── -->
+    <div class="search-section">
+      <div class="section-header">
+        <span class="section-icon">🔍</span>
+        <span class="section-title">SONG SUCHEN & HINZUFÜGEN</span>
+      </div>
+      <div class="search-bar">
+        <input type="text" id="searchInput" class="neon-input search-input"
+          placeholder="Song oder Künstler suchen...">
+        <button id="searchBtn" class="neon-btn primary">SUCHEN</button>
+      </div>
+      <div id="searchResults" class="search-results"></div>
+    </div>
+
+    <!-- ─── PARTY PLAYLIST ─── -->
+    <div class="playlist-section">
+      <div class="section-header">
+        <span class="section-icon">🎉</span>
+        <span class="section-title">PARTY PLAYLIST</span>
+        <span id="trackCount" class="track-count">0 Songs</span>
+      </div>
+      <div id="adminPlaylistControls" class="admin-controls hidden">
+        <button id="playPlaylistBtn" class="neon-btn primary small-btn">▶ PLAYLIST ABSPIELEN</button>
+        <button id="clearPlaylistBtn" class="neon-btn danger small-btn">🗑 ALLES LÖSCHEN</button>
+      </div>
+      <div id="partyPlaylist" class="playlist-container">
+        <div class="empty-state">
+          <span class="empty-icon">🎵</span>
+          <span>Noch keine Songs! Sei der Erste!</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end mainApp -->
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ADMIN MODAL -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="adminModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title">👑 ADMIN ZUGANG</span>
+        <button id="adminModalClose" class="modal-close-btn">✕</button>
+      </div>
+
+      <div id="adminLoginPane">
+        <p class="modal-text">Gib das Admin-Passwort ein:</p>
+        <input type="password" id="adminPasswordInput" class="neon-input" placeholder="Passwort...">
+        <p id="adminLoginError" class="error-text hidden">❌ Falsches Passwort</p>
+        <div class="modal-actions">
+          <button id="adminLoginBtn" class="neon-btn primary">ENTSPERREN</button>
+          <button id="adminCancelBtn" class="neon-btn secondary">ABBRECHEN</button>
+        </div>
+        <p class="modal-hint">Standard-Passwort: <span class="code-text">party2000</span></p>
+        <button id="showChangePwBtn" class="neon-btn ghost small-btn" style="margin-top:10px">
+          Passwort ändern
+        </button>
+      </div>
+
+      <div id="adminChangePwPane" class="hidden">
+        <p class="modal-text">Neues Admin-Passwort:</p>
+        <input type="password" id="newPasswordInput" class="neon-input" placeholder="Neues Passwort...">
+        <input type="password" id="confirmPasswordInput" class="neon-input" placeholder="Passwort bestätigen..." style="margin-top:8px">
+        <p id="changePwError" class="error-text hidden">❌ Passwörter stimmen nicht überein</p>
+        <div class="modal-actions">
+          <button id="changePasswordBtn" class="neon-btn primary">SPEICHERN</button>
+          <button id="cancelChangePwBtn" class="neon-btn secondary">ZURÜCK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="js/renderer.js"></script>
+</body>
+</html>
