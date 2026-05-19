@@ -267,7 +267,7 @@ function startCallbackServer(resolve, reject) {
     }
   })
 
-  callbackServer.listen(8888, 'localhost')
+  callbackServer.listen(8888, '127.0.0.1')
 }
 
 app.whenReady().then(() => {
