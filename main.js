@@ -5,7 +5,7 @@ const https = require('https')
 const crypto = require('crypto')
 const fs = require('fs')
 
-const SPOTIFY_REDIRECT_URI = 'http://localhost:8888/callback'
+const SPOTIFY_REDIRECT_URI = 'http://127.0.0.1:8888/callback'
 const SPOTIFY_SCOPES = [
   'user-read-playback-state',
   'user-modify-playback-state',
@@ -220,7 +220,7 @@ function startCallbackServer(resolve, reject) {
   }
 
   callbackServer = http.createServer((req, res) => {
-    const reqUrl = new URL(req.url, 'http://localhost:8888')
+    const reqUrl = new URL(req.url, 'http://127.0.0.1:8888')
     if (reqUrl.pathname !== '/callback') {
       res.writeHead(404)
       res.end()
