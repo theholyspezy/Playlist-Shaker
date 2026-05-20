@@ -299,7 +299,7 @@ async function loadPlaylistTracks() {
   if (!state.partyPlaylistId) return
   try {
     const data = await api.spotifyGet(
-      `/playlists/${state.partyPlaylistId}/tracks?fields=items(track(id,name,uri,duration_ms,artists,album(images))),snapshot_id&limit=100`
+      `/playlists/${state.partyPlaylistId}/tracks?limit=100`
     )
     state.playlistTracks = (data.items || [])
       .filter(item => item.track && item.track.id)
@@ -552,7 +552,7 @@ async function addTrackToPlaylist(uri) {
   try {
     const data = await api.spotifyPost(
       `/playlists/${state.partyPlaylistId}/tracks`,
-      { uris: [uri], position: null }
+      { uris: [uri] }
     )
     state.partyPlaylistSnapshot = data.snapshot_id
     await loadPlaylistTracks()
