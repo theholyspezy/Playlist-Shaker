@@ -248,7 +248,8 @@ async function loadOrCreatePartyPlaylist() {
       await loadPlaylistTracks()
       return
     } catch {
-      // Playlist might have been deleted, create a new one
+      // Playlist deleted or inaccessible – clear the saved ID and create a new one
+      await api.setConfig('partyPlaylistId', null)
     }
   }
 
@@ -256,17 +257,16 @@ async function loadOrCreatePartyPlaylist() {
 }
 
 async function createPartyPlaylist() {
-  const userId = state.userId || await api.getConfig('userId')
-  if (!userId) return
-
   try {
     const now = new Date()
     const dateStr = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    const pl = await api.spotifyPost(`/users/${userId}/playlists`, {
-      name: `🎉 Party Shaker – ${dateStr}`,
-      description: 'Party Playlist – erstellt mit Party Shaker 2000',
+    // Use /me/playlists – does not require a user ID and avoids permission edge cases
+    const pl = await api.spotifyPost('/me/playlists', {
+      name: `Party Shaker - ${dateStr}`,
+      description: 'Party Playlist - erstellt mit Party Shaker 2000',
       public: true,
     })
+    if (!pl || !pl.id) throw new Error('Ungültige API-Antwort: ' + JSON.stringify(pl))
     state.partyPlaylistId = pl.id
     state.partyPlaylistSnapshot = pl.snapshot_id
     await api.setConfig('partyPlaylistId', pl.id)
@@ -274,8 +274,25 @@ async function createPartyPlaylist() {
     showToast('🎉 Party Playlist erstellt!', 'success')
   } catch (err) {
     console.error('Playlist creation failed:', err)
-    showToast('Playlist konnte nicht erstellt werden', 'error')
+    showToast('Playlist konnte nicht erstellt werden: ' + err.message, 'error')
+    // Show a "create" button in the UI so the user can retry
+    renderPlaylistCreationFailed()
   }
+}
+
+function renderPlaylistCreationFailed() {
+  const container = $('partyPlaylist')
+  $('trackCount').textContent = '–'
+  container.innerHTML = `
+    <div class="empty-state">
+      <span class="empty-icon">⚠️</span>
+      <span>Playlist konnte nicht erstellt werden.</span>
+      <button id="retryCreateBtn" class="neon-btn primary" style="margin-top:12px">
+        🔄 PLAYLIST ERSTELLEN
+      </button>
+    </div>
+  `
+  $('retryCreateBtn').onclick = createPartyPlaylist
 }
 
 async function loadPlaylistTracks() {
@@ -467,7 +484,7 @@ async function doSearch() {
 
   try {
     const data = await api.spotifyGet(
-      `/search?q=${encodeURIComponent(query)}&type=track&limit=8&market=DE`
+      `/search?q=${encodeURIComponent(query)}&type=track&limit=20`
     )
     renderSearchResults(data.tracks.items || [])
   } catch (err) {

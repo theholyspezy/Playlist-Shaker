@@ -782,7 +782,7 @@ body {
 .search-input { flex: 1; }
 
 .search-results {
-  max-height: 160px;
+  max-height: 240px;
   overflow-y: auto;
   padding: 0 14px 8px;
 }
