@@ -1,7 +1,6 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, net } = require('electron')
 const path = require('path')
 const http = require('http')
-const https = require('https')
 const crypto = require('crypto')
 const fs = require('fs')
 
@@ -64,42 +63,24 @@ async function spotifyRequest(method, endpoint, body = null) {
     ? endpoint
     : `https://api.spotify.com/v1${endpoint}`
 
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(fullUrl)
-    const options = {
-      hostname: urlObj.hostname,
-      path: urlObj.pathname + urlObj.search,
-      method: method.toUpperCase(),
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    }
+  const headers = { 'Authorization': `Bearer ${token}` }
+  const init = { method: method.toUpperCase(), headers }
 
-    const req = https.request(options, (res) => {
-      let data = ''
-      res.on('data', chunk => { data += chunk })
-      res.on('end', () => {
-        if (res.statusCode === 204 || res.statusCode === 202) {
-          resolve(null)
-        } else if (res.statusCode >= 200 && res.statusCode < 300) {
-          try {
-            resolve(data ? JSON.parse(data) : null)
-          } catch {
-            resolve(data)
-          }
-        } else {
-          const errMsg = `Spotify API ${res.statusCode}: ${data}`
-          console.error(errMsg)
-          reject(new Error(errMsg))
-        }
-      })
-    })
+  if (body !== null && body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    init.body = JSON.stringify(body)
+  }
 
-    req.on('error', reject)
-    if (body) req.write(JSON.stringify(body))
-    req.end()
-  })
+  const res = await net.fetch(fullUrl, init)
+
+  if (res.status === 204 || res.status === 202) return null
+
+  const text = await res.text()
+  if (!res.ok) {
+    console.error(`Spotify API ${res.status}: ${text}`)
+    throw new Error(`Spotify API ${res.status}: ${text}`)
+  }
+  return text ? JSON.parse(text) : null
 }
 
 async function getValidToken() {
@@ -124,93 +105,47 @@ async function refreshAccessToken() {
     throw new Error('No refresh token or client ID')
   }
 
-  const postData = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: config.refreshToken,
-    client_id: config.clientId,
-  }).toString()
-
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: 'accounts.spotify.com',
-      path: '/api/token',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(postData),
-      },
-    }
-
-    const req = https.request(options, (res) => {
-      let data = ''
-      res.on('data', chunk => { data += chunk })
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data)
-          if (json.access_token) {
-            config.accessToken = json.access_token
-            config.tokenExpiry = Date.now() + (json.expires_in * 1000)
-            if (json.refresh_token) config.refreshToken = json.refresh_token
-            saveConfig()
-            resolve(json.access_token)
-          } else {
-            reject(new Error('No access_token in refresh response'))
-          }
-        } catch (err) {
-          reject(err)
-        }
-      })
-    })
-    req.on('error', reject)
-    req.write(postData)
-    req.end()
+  const res = await net.fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: config.refreshToken,
+      client_id: config.clientId,
+    }),
   })
+
+  const json = await res.json()
+  if (!json.access_token) throw new Error('Token refresh failed: ' + JSON.stringify(json))
+
+  config.accessToken = json.access_token
+  config.tokenExpiry = Date.now() + (json.expires_in * 1000)
+  if (json.refresh_token) config.refreshToken = json.refresh_token
+  saveConfig()
+  return json.access_token
 }
 
 async function exchangeCodeForToken(code) {
-  const postData = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: SPOTIFY_REDIRECT_URI,
-    client_id: config.clientId,
-    code_verifier: codeVerifier,
-  }).toString()
-
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: 'accounts.spotify.com',
-      path: '/api/token',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(postData),
-      },
-    }
-
-    const req = https.request(options, (res) => {
-      let data = ''
-      res.on('data', chunk => { data += chunk })
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data)
-          if (json.access_token) {
-            config.accessToken = json.access_token
-            config.refreshToken = json.refresh_token
-            config.tokenExpiry = Date.now() + (json.expires_in * 1000)
-            saveConfig()
-            resolve(json)
-          } else {
-            reject(new Error(`Token exchange failed: ${data}`))
-          }
-        } catch (err) {
-          reject(err)
-        }
-      })
-    })
-    req.on('error', reject)
-    req.write(postData)
-    req.end()
+  const res = await net.fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: SPOTIFY_REDIRECT_URI,
+      client_id: config.clientId,
+      code_verifier: codeVerifier,
+    }),
   })
+
+  const json = await res.json()
+  if (!json.access_token) throw new Error(`Token exchange failed: ${JSON.stringify(json)}`)
+
+  config.accessToken = json.access_token
+  config.refreshToken = json.refresh_token
+  config.tokenExpiry = Date.now() + (json.expires_in * 1000)
+  saveConfig()
+  return json
 }
 
 function startCallbackServer(resolve, reject) {
