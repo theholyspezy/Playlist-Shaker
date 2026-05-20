@@ -65,8 +65,10 @@ async function spotifyRequest(method, endpoint, body = null) {
     : `https://api.spotify.com/v1${endpoint}`
 
   return new Promise((resolve, reject) => {
-    const urlObj = new URL(fullUrl)
-    const headers = { 'Authorization': `Bearer ${token}` }
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json',
+    }
 
     let bodyData = null
     if (body !== null && body !== undefined) {
@@ -75,14 +77,9 @@ async function spotifyRequest(method, endpoint, body = null) {
       headers['Content-Length'] = Buffer.byteLength(bodyData)
     }
 
-    const options = {
-      hostname: urlObj.hostname,
-      path: urlObj.pathname + urlObj.search,
-      method: method.toUpperCase(),
-      headers,
-    }
-
-    const req = https.request(options, (res) => {
+    // Pass the URL string directly — Node.js handles hostname/path internally,
+    // avoiding any encoding issues from manual URL decomposition
+    const req = https.request(fullUrl, { method: method.toUpperCase(), headers }, (res) => {
       let data = ''
       res.on('data', chunk => { data += chunk })
       res.on('end', () => {
@@ -90,14 +87,11 @@ async function spotifyRequest(method, endpoint, body = null) {
           resolve(null)
         } else if (res.statusCode >= 200 && res.statusCode < 300) {
           if (!data) { resolve(null); return }
-          try {
-            resolve(JSON.parse(data))
-          } catch {
-            resolve(null)
-          }
+          try { resolve(JSON.parse(data)) }
+          catch { resolve(null) }
         } else {
           const msg = `Spotify API ${res.statusCode}: ${data}`
-          console.error(msg)
+          console.error(`[Spotify] ${method.toUpperCase()} ${fullUrl} → ${res.statusCode}`)
           reject(new Error(msg))
         }
       })

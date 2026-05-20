@@ -639,16 +639,9 @@ body {
 .eq-bar {
   flex: 1;
   min-height: 3px;
+  height: 3px;
   border-radius: 2px 2px 0 0;
-  transition: height .1s;
-}
-
-/* When playing, bars animate */
-.eq-playing .eq-bar { animation: eq-dance var(--dur, .5s) ease-in-out infinite alternate; }
-
-@keyframes eq-dance {
-  0%   { height: 3px; }
-  100% { height: var(--h, 20px); }
+  /* height driven by JS requestAnimationFrame */
 }
 
 /* Player Controls */
@@ -794,7 +787,7 @@ body {
   padding: 6px 10px;
   border-radius: var(--radius);
   border: 1px solid transparent;
-  cursor: default;
+  cursor: pointer;
   transition: all .15s;
   margin-bottom: 3px;
 }

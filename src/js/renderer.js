@@ -50,37 +50,72 @@ function showScreen(id) {
   $(id).classList.remove('hidden')
 }
 
-// ── Equalizer ─────────────────────────────────────────────
+// ── Equalizer (JS-driven, frequency-spectrum simulation) ──
+let eqRaf = null
+let eqClock = 0
+const EQ_BARS = 24
+// Per-bar config: phase offset and frequency multipliers for bass/mid/treble bands
+const eqBarCfg = Array.from({ length: EQ_BARS }, (_, i) => {
+  const pos = i / (EQ_BARS - 1) // 0 = left/bass, 1 = right/treble
+  return {
+    phase: i * 0.38,
+    // Bass: slow & tall on the left, fades right
+    bassFreq: 0.6 + pos * 0.3,
+    bassAmp:  (1 - pos) * 20 + 4,
+    // Mid: dominant in the middle
+    midFreq:  1.4 + pos * 0.8,
+    midAmp:   12 - Math.abs(pos - 0.5) * 16,
+    // Treble: fast & small on the right
+    trebFreq: 3.0 + pos * 3.0,
+    trebAmp:  pos * 10,
+  }
+})
+
 function buildEqualizer() {
   const eq = $('equalizer')
   const colors = [
-    '#39ff14', '#00fff5', '#0080ff',
-    '#9d00ff', '#ff2d9e', '#ff8800',
-    '#ffe600', '#39ff14', '#00fff5',
-    '#0080ff', '#9d00ff', '#ff2d9e',
-    '#ff8800', '#ffe600', '#39ff14',
-    '#00fff5', '#0080ff', '#9d00ff',
-    '#ff2d9e', '#ff8800', '#ffe600',
-    '#39ff14', '#00fff5', '#0080ff',
+    '#39ff14','#00fff5','#0080ff','#9d00ff','#ff2d9e','#ff8800',
+    '#ffe600','#39ff14','#00fff5','#0080ff','#9d00ff','#ff2d9e',
+    '#ff8800','#ffe600','#39ff14','#00fff5','#0080ff','#9d00ff',
+    '#ff2d9e','#ff8800','#ffe600','#39ff14','#00fff5','#0080ff',
   ]
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < EQ_BARS; i++) {
     const bar = document.createElement('div')
     bar.className = 'eq-bar'
-    const h = 10 + Math.floor(Math.random() * 22)
-    const dur = (0.25 + Math.random() * 0.45).toFixed(2)
-    const delay = (Math.random() * 0.4).toFixed(2)
-    bar.style.cssText = `
-      --h: ${h}px;
-      --dur: ${dur}s;
-      animation-delay: ${delay}s;
-      background: linear-gradient(to top, ${colors[i]}, rgba(255,255,255,.6));
-    `
+    bar.style.background = `linear-gradient(to top, ${colors[i]}, rgba(255,255,255,.55))`
+    bar.style.height = '3px'
     eq.appendChild(bar)
   }
+  runEqualizer()
+}
+
+function runEqualizer() {
+  const bars = $('equalizer').querySelectorAll('.eq-bar')
+  eqClock += state.isPlaying ? 0.04 : 0
+
+  bars.forEach((bar, i) => {
+    const cfg = eqBarCfg[i]
+    let h
+    if (!state.isPlaying) {
+      // Smooth decay to floor when paused
+      h = Math.max(3, (parseFloat(bar.style.height) || 3) * 0.88)
+    } else {
+      // Overlapping sine waves simulate bass / mid / treble bands
+      h = 3
+        + Math.abs(Math.sin(eqClock * cfg.bassFreq + cfg.phase))          * cfg.bassAmp
+        + Math.abs(Math.sin(eqClock * cfg.midFreq  + cfg.phase * 1.7))    * Math.max(0, cfg.midAmp)
+        + Math.abs(Math.sin(eqClock * cfg.trebFreq + cfg.phase * 2.4))    * cfg.trebAmp
+        + (Math.random() < 0.04 ? Math.random() * 7 : 0) // occasional spike
+      h = Math.min(30, Math.max(3, h))
+    }
+    bar.style.height = h + 'px'
+  })
+
+  eqRaf = requestAnimationFrame(runEqualizer)
 }
 
 function setEqualizerPlaying(playing) {
-  $('equalizer').classList.toggle('eq-playing', playing)
+  // state.isPlaying is already updated before this is called — no extra work needed
 }
 
 // ── Window Controls ───────────────────────────────────────
@@ -527,15 +562,20 @@ function renderSearchResults(tracks) {
       </button>
     `
 
-    div.querySelector('.add-btn').onclick = async (e) => {
-      const btn = e.currentTarget
-      if (btn.disabled) return
-      btn.textContent = '⏳'
-      btn.disabled = true
+    const addBtn = div.querySelector('.add-btn')
+
+    async function triggerAdd() {
+      if (addBtn.disabled) return
+      addBtn.textContent = '⏳'
+      addBtn.disabled = true
       const success = await addTrackToPlaylist(track.uri)
-      btn.textContent = success ? '✓' : '+ ADD'
-      if (!success) btn.disabled = false
+      addBtn.textContent = success ? '✓' : '+ ADD'
+      if (!success) addBtn.disabled = false
     }
+
+    addBtn.onclick = triggerAdd
+    // Double-click anywhere on the row also adds the track
+    div.ondblclick = triggerAdd
 
     container.appendChild(div)
   })
