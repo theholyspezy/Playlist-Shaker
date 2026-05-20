@@ -483,9 +483,8 @@ async function doSearch() {
   btn.disabled = true
 
   try {
-    const data = await api.spotifyGet(
-      `/search?q=${encodeURIComponent(query)}&type=track&limit=20`
-    )
+    const params = new URLSearchParams({ q: query, type: 'track', limit: '20' })
+    const data = await api.spotifyGet(`https://api.spotify.com/v1/search?${params}`)
     renderSearchResults(data.tracks.items || [])
   } catch (err) {
     showToast('Suche fehlgeschlagen: ' + err.message, 'error')
