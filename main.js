@@ -175,6 +175,7 @@ async function refreshAccessToken() {
           config.accessToken = json.access_token
           config.tokenExpiry = Date.now() + (json.expires_in * 1000)
           if (json.refresh_token) config.refreshToken = json.refresh_token
+          if (json.scope) config.grantedScopes = json.scope
           saveConfig()
           resolve(json.access_token)
         } catch (err) { reject(err) }
