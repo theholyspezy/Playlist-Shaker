@@ -371,8 +371,10 @@ function renderPlaylistPicker(playlists) {
     const art = (pl.images && pl.images.length > 0)
       ? `<img class="picker-art" src="${pl.images[pl.images.length - 1].url}" alt="">`
       : `<div class="picker-art-placeholder">🎵</div>`
-    const total = pl.tracks ? pl.tracks.total : 0
+    const total = (pl.tracks && typeof pl.tracks.total === 'number') ? pl.tracks.total : null
+    const countLabel = total === null ? '' : `${total} Songs`
     const owner = pl.owner ? (pl.owner.display_name || pl.owner.id) : ''
+    const meta = [countLabel, owner ? escapeHtml(owner) : ''].filter(Boolean).join(' · ')
 
     const div = document.createElement('div')
     div.className = `picker-item${isActive ? ' active' : ''}`
@@ -380,7 +382,7 @@ function renderPlaylistPicker(playlists) {
       ${art}
       <div class="picker-info">
         <div class="picker-name">${escapeHtml(pl.name || 'Ohne Titel')}</div>
-        <div class="picker-meta">${total} Songs${owner ? ' · ' + escapeHtml(owner) : ''}</div>
+        <div class="picker-meta">${meta}</div>
       </div>
       ${isActive ? '<span class="picker-active-badge">AKTIV</span>' : ''}
     `
@@ -434,6 +436,7 @@ async function loadPlaylistTracks() {
     renderPlaylist()
   } catch (err) {
     console.error('Failed to load tracks:', err)
+    showToast('Songs konnten nicht geladen werden: ' + err.message, 'error')
   }
 }
 
@@ -610,9 +613,7 @@ async function doSearch() {
   btn.disabled = true
 
   try {
-    // No 'limit' param — Spotify defaults to 20 results. Some setups rejected
-    // an explicit limit with "Invalid limit", so we omit it entirely.
-    const params = new URLSearchParams({ q: query, type: 'track' })
+    const params = new URLSearchParams({ q: query, type: 'track', limit: '50' })
     const data = await api.spotifyGet(`https://api.spotify.com/v1/search?${params}`)
     renderSearchResults((data.tracks && data.tracks.items) || [])
   } catch (err) {
