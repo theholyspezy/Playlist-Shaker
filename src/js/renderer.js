@@ -316,11 +316,13 @@ async function createPartyPlaylist() {
   try {
     const now = new Date()
     const dateStr = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    // Use /me/playlists – does not require a user ID and avoids permission edge cases
+    // Use /me/playlists – does not require a user ID and avoids permission edge cases.
+    // Create as PRIVATE: only needs playlist-modify-private, the least-privileged
+    // write scope, which avoids 403s when modify-public isn't effectively granted.
     const pl = await api.spotifyPost('/me/playlists', {
       name: `Party Shaker - ${dateStr}`,
       description: 'Party Playlist - erstellt mit Party Shaker 2000',
-      public: true,
+      public: false,
     })
     if (!pl || !pl.id) throw new Error('Ungültige API-Antwort: ' + JSON.stringify(pl))
     state.partyPlaylistId = pl.id
@@ -749,13 +751,8 @@ async function addTrackToPlaylist(uri) {
 // Shown when Spotify refuses a write (403). Almost always a missing-scope token.
 async function handleWriteForbidden() {
   const scopes = await api.getConfig('grantedScopes')
-  const hasModify = scopes && scopes.includes('playlist-modify')
   console.warn('Granted scopes:', scopes)
-  if (hasModify) {
-    showToast('Spotify verweigert den Schreibzugriff (403). Du kannst nur eigene Playlists bearbeiten – erstelle mit "✨ NEUE" eine neue.', 'error')
-  } else {
-    showToast('Keine Schreib-Berechtigung. Bitte LOGOUT klicken und neu einloggen (Zustimmung erteilen).', 'error')
-  }
+  showToast('403 Schreibzugriff verweigert. Erteilte Rechte: ' + (scopes || '(KEINE – bitte neu einloggen)'), 'error', 9000)
 }
 
 async function removeTrackFromPlaylist(uri, index) {
@@ -1042,7 +1039,7 @@ function escapeHtml(str) {
 }
 
 let toastTimer = null
-function showToast(message, type = '') {
+function showToast(message, type = '', duration = 3200) {
   const toast = $('toast')
   toast.textContent = message
   toast.className = `toast ${type}`
@@ -1051,7 +1048,7 @@ function showToast(message, type = '') {
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => {
     toast.classList.add('hidden')
-  }, 3200)
+  }, duration)
 }
 
 // ── Boot ──────────────────────────────────────────────────
