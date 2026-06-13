@@ -228,8 +228,13 @@ function bindMainApp() {
     $('adminLoginError').classList.add('hidden')
   })
   $('showChangePwBtn').onclick = () => {
+    $('oldPasswordInput').value = ''
+    $('newPasswordInput').value = ''
+    $('confirmPasswordInput').value = ''
+    $('changePwError').classList.add('hidden')
     $('adminLoginPane').classList.add('hidden')
     $('adminChangePwPane').classList.remove('hidden')
+    setTimeout(() => $('oldPasswordInput').focus(), 100)
   }
   $('cancelChangePwBtn').onclick = () => {
     $('adminChangePwPane').classList.add('hidden')
@@ -353,7 +358,8 @@ async function openPlaylistPicker() {
 
   try {
     const playlists = []
-    let nextUrl = '/me/playlists?limit=50'
+    // No 'limit' param (rejected as "Invalid limit" in this setup); follow `next`
+    let nextUrl = '/me/playlists'
     while (nextUrl) {
       const data = await api.spotifyGet(nextUrl)
       if (!data || !data.items) break
@@ -649,7 +655,9 @@ async function doSearch() {
   btn.disabled = true
 
   try {
-    const params = new URLSearchParams({ q: query, type: 'track', limit: '50' })
+    // No 'limit' param: this Spotify setup rejects it with "Invalid limit".
+    // Spotify defaults to 20 results, which meets the minimum we need.
+    const params = new URLSearchParams({ q: query, type: 'track' })
     const data = await api.spotifyGet(`https://api.spotify.com/v1/search?${params}`)
     renderSearchResults((data.tracks && data.tracks.items) || [])
   } catch (err) {
@@ -967,13 +975,23 @@ function exitAdminMode() {
 }
 
 async function changeAdminPassword() {
+  const oldPw = $('oldPasswordInput').value
   const newPw = $('newPasswordInput').value
   const confirmPw = $('confirmPasswordInput').value
 
   $('changePwError').classList.add('hidden')
 
+  // Verify the current password first — without it, no change is allowed
+  const oldOk = await api.checkPassword(oldPw)
+  if (!oldOk) {
+    $('changePwError').textContent = '❌ Aktuelles Passwort ist falsch'
+    $('changePwError').classList.remove('hidden')
+    $('oldPasswordInput').select()
+    return
+  }
+
   if (newPw.length < 4) {
-    $('changePwError').textContent = '❌ Passwort muss mindestens 4 Zeichen haben'
+    $('changePwError').textContent = '❌ Neues Passwort muss mindestens 4 Zeichen haben'
     $('changePwError').classList.remove('hidden')
     return
   }
