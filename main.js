@@ -77,9 +77,20 @@ async function spotifyRequest(method, endpoint, body = null) {
       headers['Content-Length'] = Buffer.byteLength(bodyData)
     }
 
-    // Pass the URL string directly — Node.js handles hostname/path internally,
-    // avoiding any encoding issues from manual URL decomposition
-    const req = https.request(fullUrl, { method: method.toUpperCase(), headers }, (res) => {
+    // Canonical form: parse the URL into discrete options. Passing a URL string
+    // together with an options object can drop the query string in some
+    // Electron/Node builds, which made Spotify reject the (missing) limit param.
+    const u = new URL(fullUrl)
+    const options = {
+      protocol: u.protocol,
+      hostname: u.hostname,
+      port: u.port || 443,
+      path: u.pathname + u.search,
+      method: method.toUpperCase(),
+      headers,
+    }
+
+    const req = https.request(options, (res) => {
       let data = ''
       res.on('data', chunk => { data += chunk })
       res.on('end', () => {
