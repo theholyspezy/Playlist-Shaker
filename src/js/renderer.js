@@ -239,6 +239,7 @@ function bindMainApp() {
 
   // Admin playlist controls
   $('playPlaylistBtn').onclick  = playPartyPlaylist
+  $('newPlaylistBtn').onclick   = newPartyPlaylist
   $('clearPlaylistBtn').onclick = clearPartyPlaylist
 
   // Logout
@@ -304,6 +305,7 @@ async function createPartyPlaylist() {
     if (!pl || !pl.id) throw new Error('Ungültige API-Antwort: ' + JSON.stringify(pl))
     state.partyPlaylistId = pl.id
     state.partyPlaylistSnapshot = pl.snapshot_id
+    state.playlistTracks = []
     await api.setConfig('partyPlaylistId', pl.id)
     renderPlaylist()
     showToast('🎉 Party Playlist erstellt!', 'success')
@@ -313,6 +315,18 @@ async function createPartyPlaylist() {
     // Show a "create" button in the UI so the user can retry
     renderPlaylistCreationFailed()
   }
+}
+
+// Admin: create a brand-new empty party playlist (the old one stays in the
+// user's Spotify account but is no longer tracked here)
+async function newPartyPlaylist() {
+  if (!confirm('Neue, leere Party Playlist erstellen?\n\nDie aktuelle Playlist bleibt in deinem Spotify-Account erhalten, wird hier aber nicht mehr angezeigt.')) {
+    return
+  }
+  await api.setConfig('partyPlaylistId', null)
+  state.partyPlaylistId = null
+  state.playlistTracks = []
+  await createPartyPlaylist()
 }
 
 function renderPlaylistCreationFailed() {
@@ -333,12 +347,19 @@ function renderPlaylistCreationFailed() {
 async function loadPlaylistTracks() {
   if (!state.partyPlaylistId) return
   try {
-    const data = await api.spotifyGet(
-      `/playlists/${state.partyPlaylistId}/tracks?limit=100`
-    )
-    state.playlistTracks = (data.items || [])
-      .filter(item => item.track && item.track.id)
-      .map(item => item.track)
+    const tracks = []
+    // Follow Spotify's pagination via the `next` URL — no explicit limit param,
+    // so it works for playlists of any length without limit-validation issues
+    let nextUrl = `/playlists/${state.partyPlaylistId}/tracks`
+    while (nextUrl) {
+      const data = await api.spotifyGet(nextUrl)
+      if (!data || !data.items) break
+      for (const item of data.items) {
+        if (item.track && item.track.id) tracks.push(item.track)
+      }
+      nextUrl = data.next || null
+    }
+    state.playlistTracks = tracks
     renderPlaylist()
   } catch (err) {
     console.error('Failed to load tracks:', err)
@@ -518,9 +539,11 @@ async function doSearch() {
   btn.disabled = true
 
   try {
-    const params = new URLSearchParams({ q: query, type: 'track', limit: '20' })
+    // No 'limit' param — Spotify defaults to 20 results. Some setups rejected
+    // an explicit limit with "Invalid limit", so we omit it entirely.
+    const params = new URLSearchParams({ q: query, type: 'track' })
     const data = await api.spotifyGet(`https://api.spotify.com/v1/search?${params}`)
-    renderSearchResults(data.tracks.items || [])
+    renderSearchResults((data.tracks && data.tracks.items) || [])
   } catch (err) {
     showToast('Suche fehlgeschlagen: ' + err.message, 'error')
   } finally {

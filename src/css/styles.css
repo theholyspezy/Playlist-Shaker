@@ -503,11 +503,11 @@ body {
   overflow: hidden;
 }
 
-/* RIGHT: full-height playlist — narrow (~22% of window) */
+/* RIGHT: full-height playlist — narrow, but wide enough for the heading */
 .right-panel {
-  width: 23%;
-  min-width: 230px;
-  max-width: 360px;
+  width: 25%;
+  min-width: 300px;
+  max-width: 440px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -937,6 +937,12 @@ body {
 
 .playlist-title-text {
   /* inherits .section-title styles */
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.playlist-title-group {
+  flex-shrink: 0;
 }
 
 /* Admin controls inline in playlist header */
