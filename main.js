@@ -274,9 +274,9 @@ app.whenReady().then(() => {
   loadConfig()
 
   mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 820,
-    minWidth: 900,
+    width: 1280,
+    height: 800,
+    minWidth: 980,
     minHeight: 680,
     frame: false,
     backgroundColor: '#0d0d1a',

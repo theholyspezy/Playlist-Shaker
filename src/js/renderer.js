@@ -286,10 +286,18 @@ async function loadOrCreatePartyPlaylist() {
   if (savedId) {
     try {
       const pl = await api.spotifyGet(`/playlists/${savedId}`)
-      state.partyPlaylistId = savedId
-      state.partyPlaylistSnapshot = pl.snapshot_id
-      await loadPlaylistTracks()
-      return
+      // Only use it if the current user owns it (or it's collaborative).
+      // Spotify forbids reading/modifying tracks of playlists you don't own
+      // (e.g. editorial playlists), which would 403 here on startup.
+      const owned = pl.owner && pl.owner.id === state.userId
+      if (owned || pl.collaborative) {
+        state.partyPlaylistId = savedId
+        state.partyPlaylistSnapshot = pl.snapshot_id
+        await loadPlaylistTracks()
+        return
+      }
+      // Not ours – drop it and create a fresh party playlist
+      await api.setConfig('partyPlaylistId', null)
     } catch {
       // Playlist deleted or inaccessible – clear the saved ID and create a new one
       await api.setConfig('partyPlaylistId', null)
@@ -352,7 +360,12 @@ async function openPlaylistPicker() {
       playlists.push(...data.items.filter(p => p && p.id))
       nextUrl = data.next || null
     }
-    renderPlaylistPicker(playlists)
+    // Only show playlists the user can actually read AND modify – their own
+    // or collaborative ones. Spotify returns 403 for editorial/foreign playlists.
+    const usable = playlists.filter(p =>
+      (p.owner && p.owner.id === state.userId) || p.collaborative
+    )
+    renderPlaylistPicker(usable)
   } catch (err) {
     list.innerHTML = `<div class="picker-empty">Fehler beim Laden: ${escapeHtml(err.message)}</div>`
   }
@@ -421,22 +434,45 @@ async function loadPlaylistTracks() {
   if (!state.partyPlaylistId) return
   try {
     const tracks = []
-    // Follow Spotify's pagination via the `next` URL — no explicit limit param,
-    // so it works for playlists of any length without limit-validation issues
-    let nextUrl = `/playlists/${state.partyPlaylistId}/tracks`
-    while (nextUrl) {
-      const data = await api.spotifyGet(nextUrl)
-      if (!data || !data.items) break
-      for (const item of data.items) {
-        if (item.track && item.track.id) tracks.push(item.track)
+    // Read tracks from the playlist object itself. The /playlists/{id} endpoint
+    // works reliably, whereas the /playlists/{id}/tracks sub-endpoint can return
+    // 403 in some Spotify app configurations. The playlist object already embeds
+    // the first 100 tracks plus a `next` link for further pages.
+    const pl = await api.spotifyGet(`/playlists/${state.partyPlaylistId}`)
+    if (pl && pl.snapshot_id) state.partyPlaylistSnapshot = pl.snapshot_id
+
+    const collect = items => {
+      for (const item of (items || [])) {
+        if (item && item.track && item.track.id) tracks.push(item.track)
       }
-      nextUrl = data.next || null
     }
+
+    let page = pl && pl.tracks ? pl.tracks : null
+    collect(page && page.items)
+
+    // Follow pagination if the playlist has more than 100 tracks. If a page
+    // request fails (e.g. 403 on the tracks endpoint), keep what we already have.
+    let nextUrl = page ? page.next : null
+    while (nextUrl) {
+      try {
+        const data = await api.spotifyGet(nextUrl)
+        collect(data && data.items)
+        nextUrl = data ? data.next : null
+      } catch (pageErr) {
+        console.warn('Pagination stopped:', pageErr.message)
+        break
+      }
+    }
+
     state.playlistTracks = tracks
     renderPlaylist()
   } catch (err) {
     console.error('Failed to load tracks:', err)
-    showToast('Songs konnten nicht geladen werden: ' + err.message, 'error')
+    if (err.message.includes('403')) {
+      showToast('Diese Playlist kann nicht gelesen werden (nur eigene Playlists werden unterstützt).', 'warning')
+    } else {
+      showToast('Songs konnten nicht geladen werden: ' + err.message, 'error')
+    }
   }
 }
 
