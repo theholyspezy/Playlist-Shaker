@@ -185,6 +185,10 @@ function bindAuthCallbackListener() {
 // ── Main App ──────────────────────────────────────────────
 async function startMainApp() {
   showScreen('mainApp')
+  // Safety: make sure no modal overlay is left open (an open overlay would
+  // block all clicks/typing, including the search field)
+  $('adminModal').classList.add('hidden')
+  $('playlistPickerModal').classList.add('hidden')
   bindMainApp()
   await loadUserProfile()
   await loadOrCreatePartyPlaylist()
@@ -265,6 +269,14 @@ function bindMainApp() {
   // Close modal on overlay click
   $('adminModal').addEventListener('click', e => {
     if (e.target === $('adminModal')) closeAdminModal()
+  })
+
+  // Escape closes any open dialog (safety against a blocking overlay)
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      $('adminModal').classList.add('hidden')
+      $('playlistPickerModal').classList.add('hidden')
+    }
   })
 }
 

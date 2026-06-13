@@ -289,6 +289,14 @@ app.whenReady().then(() => {
   })
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'))
+
+  // F12 toggles the DevTools console (helps diagnose API/runtime issues)
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      mainWindow.webContents.toggleDevTools()
+      event.preventDefault()
+    }
+  })
 })
 
 app.on('window-all-closed', () => {
