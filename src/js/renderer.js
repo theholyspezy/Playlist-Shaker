@@ -677,7 +677,7 @@ function renderSearchResults(tracks) {
 
   const existingUris = new Set(state.playlistTracks.map(t => t.uri))
 
-  container.innerHTML = ''
+  container.innerHTML = `<div class="results-count">${tracks.length} Treffer</div>`
   tracks.forEach(track => {
     const alreadyAdded = existingUris.has(track.uri)
     const art = track.album.images.length > 0
@@ -737,8 +737,24 @@ async function addTrackToPlaylist(uri) {
     showToast('🎵 Song zur Party Playlist hinzugefügt!', 'success')
     return true
   } catch (err) {
-    showToast('Fehler beim Hinzufügen: ' + err.message, 'error')
+    if (err.message.includes('403')) {
+      await handleWriteForbidden()
+    } else {
+      showToast('Fehler beim Hinzufügen: ' + err.message, 'error')
+    }
     return false
+  }
+}
+
+// Shown when Spotify refuses a write (403). Almost always a missing-scope token.
+async function handleWriteForbidden() {
+  const scopes = await api.getConfig('grantedScopes')
+  const hasModify = scopes && scopes.includes('playlist-modify')
+  console.warn('Granted scopes:', scopes)
+  if (hasModify) {
+    showToast('Spotify verweigert den Schreibzugriff (403). Du kannst nur eigene Playlists bearbeiten – erstelle mit "✨ NEUE" eine neue.', 'error')
+  } else {
+    showToast('Keine Schreib-Berechtigung. Bitte LOGOUT klicken und neu einloggen (Zustimmung erteilen).', 'error')
   }
 }
 

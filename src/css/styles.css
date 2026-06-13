@@ -905,6 +905,14 @@ body {
   cursor: default;
 }
 
+.results-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dim);
+  padding: 2px 4px 6px;
+  letter-spacing: 1px;
+}
+
 .no-results {
   text-align: center;
   padding: 16px;

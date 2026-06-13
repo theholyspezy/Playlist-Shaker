@@ -202,6 +202,7 @@ async function exchangeCodeForToken(code) {
           config.accessToken = json.access_token
           config.refreshToken = json.refresh_token
           config.tokenExpiry = Date.now() + (json.expires_in * 1000)
+          config.grantedScopes = json.scope || ''
           saveConfig()
           resolve(json)
         } catch (err) { reject(err) }
@@ -327,7 +328,8 @@ ipcMain.handle('start-auth', () => {
   authUrl.searchParams.set('scope', SPOTIFY_SCOPES)
   authUrl.searchParams.set('code_challenge_method', 'S256')
   authUrl.searchParams.set('code_challenge', codeChallenge)
-  authUrl.searchParams.set('show_dialog', 'false')
+  // Force the consent screen so all requested scopes are granted fresh
+  authUrl.searchParams.set('show_dialog', 'true')
 
   return new Promise((resolve) => {
     startCallbackServer(
