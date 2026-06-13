@@ -101,8 +101,21 @@ async function spotifyRequest(method, endpoint, body = null) {
           try { resolve(JSON.parse(data)) }
           catch { resolve(null) }
         } else {
-          const msg = `Spotify API ${res.statusCode}: ${data}`
-          console.error(`[Spotify] ${method.toUpperCase()} ${fullUrl} → ${res.statusCode}`)
+          // Inspect the TLS certificate issuer. If it isn't a real public CA
+          // but e.g. an antivirus/proxy, the HTTPS connection is being
+          // intercepted — which can silently corrupt requests and cause
+          // otherwise-impossible errors (403 on own playlist, "Invalid limit").
+          let issuer = 'unbekannt'
+          try {
+            const cert = res.socket && res.socket.getPeerCertificate
+              ? res.socket.getPeerCertificate()
+              : null
+            if (cert && cert.issuer) {
+              issuer = cert.issuer.O || cert.issuer.CN || JSON.stringify(cert.issuer)
+            }
+          } catch { /* ignore */ }
+          const msg = `Spotify API ${res.statusCode}: ${data} [TLS-Aussteller: ${issuer}]`
+          console.error(`[Spotify] ${method.toUpperCase()} ${fullUrl} → ${res.statusCode} | TLS issuer: ${issuer}`)
           reject(new Error(msg))
         }
       })

@@ -800,7 +800,11 @@ async function isPlaylistOwnedByUser(playlistId) {
 async function handleWriteForbidden(err) {
   const scopes = await api.getConfig('grantedScopes')
   console.warn('Write forbidden. Granted scopes:', scopes, '| error:', err && err.message)
-  showToast('403 Schreibzugriff verweigert (Playlist gehört dir, Rechte vorhanden). Bitte LOGOUT + neu einloggen.', 'error', 9000)
+  // The error message includes the TLS issuer – surface it, since a non-public
+  // issuer means an antivirus/proxy is intercepting (and breaking) the HTTPS.
+  const tlsMatch = err && err.message ? err.message.match(/\[TLS-Aussteller: ([^\]]+)\]/) : null
+  const issuer = tlsMatch ? tlsMatch[1] : '?'
+  showToast(`403 trotz eigener Playlist & voller Rechte. TLS-Aussteller der Verbindung: ${issuer} — ist das NICHT Spotify/DigiCert, blockiert dein Antivirus/Proxy die Verbindung.`, 'error', 12000)
 }
 
 async function removeTrackFromPlaylist(uri, index) {
