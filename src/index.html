@@ -114,89 +114,106 @@
       </div>
     </div>
 
-    <!-- ─── PLAYER SECTION ─── -->
-    <div class="player-section">
+    <!-- ─── TWO-COLUMN BODY ─── -->
+    <div class="app-columns">
 
-      <!-- Album Art -->
-      <div class="album-art-wrap">
-        <img id="albumArt" class="album-art hidden" src="" alt="Album Art">
-        <div id="albumArtPlaceholder" class="album-placeholder">
-          <span class="placeholder-disc">💿</span>
-        </div>
-      </div>
+      <!-- ══ LEFT PANEL: Player + Search ══ -->
+      <div class="left-panel">
 
-      <!-- Player Display & Controls -->
-      <div class="player-main">
-
-        <!-- LCD Display -->
-        <div class="lcd-display">
-          <div class="lcd-label">◄◄ NOW PLAYING ►►</div>
-          <div class="lcd-track-wrap">
-            <div id="lcdTrackScroll" class="lcd-track-scroll">
-              <span id="lcdTrackText">No track playing</span>
+        <!-- Player Section -->
+        <div class="player-section">
+          <!-- Album Art -->
+          <div class="album-art-wrap">
+            <img id="albumArt" class="album-art hidden" src="" alt="Album Art">
+            <div id="albumArtPlaceholder" class="album-placeholder">
+              <span class="placeholder-disc">💿</span>
             </div>
           </div>
-          <div id="lcdArtist" class="lcd-artist">Connect Spotify to start ♪</div>
-          <div class="lcd-time-row">
-            <span id="lcdCurrentTime" class="lcd-time">0:00</span>
-            <div class="lcd-time-bar">
-              <div id="lcdTimeFill" class="lcd-time-fill" style="width:0%"></div>
+
+          <!-- Player Display & Controls -->
+          <div class="player-main">
+            <!-- LCD Display -->
+            <div class="lcd-display">
+              <div class="lcd-label">◄◄ NOW PLAYING ►►</div>
+              <div class="lcd-track-wrap">
+                <div id="lcdTrackScroll" class="lcd-track-scroll">
+                  <span id="lcdTrackText">No track playing</span>
+                </div>
+              </div>
+              <div id="lcdArtist" class="lcd-artist">Connect Spotify to start ♪</div>
+              <div class="lcd-time-row">
+                <span id="lcdCurrentTime" class="lcd-time">0:00</span>
+                <div class="lcd-time-bar">
+                  <div id="lcdTimeFill" class="lcd-time-fill" style="width:0%"></div>
+                </div>
+                <span id="lcdTotalTime" class="lcd-time">0:00</span>
+              </div>
             </div>
-            <span id="lcdTotalTime" class="lcd-time">0:00</span>
+
+            <!-- Equalizer -->
+            <div class="equalizer-wrap">
+              <div id="equalizer" class="equalizer"></div>
+            </div>
+
+            <!-- Controls -->
+            <div class="player-controls">
+              <button id="prevBtn" class="ctrl-btn" title="Vorheriger Titel">⏮</button>
+              <button id="playPauseBtn" class="ctrl-btn play-btn" title="Play/Pause">▶</button>
+              <button id="nextBtn" class="ctrl-btn" title="Nächster Titel">⏭</button>
+              <div class="volume-wrap">
+                <span class="vol-icon" id="volIcon">🔊</span>
+                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70">
+                <span id="volValue" class="vol-value">70</span>
+              </div>
+            </div>
+          </div>
+        </div><!-- end player-section -->
+
+        <!-- Search Section (fills remaining left height) -->
+        <div class="search-section">
+          <div class="section-header">
+            <span class="section-icon">🔍</span>
+            <span class="section-title">SONG SUCHEN &amp; HINZUFÜGEN</span>
+          </div>
+          <div class="search-bar">
+            <input type="text" id="searchInput" class="neon-input search-input"
+              placeholder="Song oder Künstler suchen...">
+            <button id="searchBtn" class="neon-btn primary">SUCHEN</button>
+          </div>
+          <div id="searchResults" class="search-results"></div>
+        </div>
+
+      </div><!-- end left-panel -->
+
+      <!-- ══ RIGHT PANEL: Party Playlist (full height) ══ -->
+      <div class="right-panel">
+
+        <!-- Playlist header with all controls at the top -->
+        <div class="playlist-header">
+          <div class="playlist-header-row">
+            <div class="playlist-title-group">
+              <span class="section-icon">🎉</span>
+              <span class="section-title playlist-title-text">PARTY PLAYLIST</span>
+              <span id="trackCount" class="track-count">0 Songs</span>
+            </div>
+            <div id="adminPlaylistControls" class="admin-controls-inline hidden">
+              <button id="playPlaylistBtn" class="neon-btn primary small-btn">▶ ABSPIELEN</button>
+              <button id="clearPlaylistBtn" class="neon-btn danger small-btn">🗑 LÖSCHEN</button>
+            </div>
           </div>
         </div>
 
-        <!-- Equalizer -->
-        <div class="equalizer-wrap">
-          <div id="equalizer" class="equalizer"></div>
-        </div>
-
-        <!-- Controls -->
-        <div class="player-controls">
-          <button id="prevBtn" class="ctrl-btn" title="Vorheriger Titel">⏮</button>
-          <button id="playPauseBtn" class="ctrl-btn play-btn" title="Play/Pause">▶</button>
-          <button id="nextBtn" class="ctrl-btn" title="Nächster Titel">⏭</button>
-          <div class="volume-wrap">
-            <span class="vol-icon" id="volIcon">🔊</span>
-            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70">
-            <span id="volValue" class="vol-value">70</span>
+        <!-- Playlist items — scrolls independently -->
+        <div id="partyPlaylist" class="playlist-container">
+          <div class="empty-state">
+            <span class="empty-icon">🎵</span>
+            <span>Noch keine Songs! Sei der Erste!</span>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- ─── SEARCH SECTION ─── -->
-    <div class="search-section">
-      <div class="section-header">
-        <span class="section-icon">🔍</span>
-        <span class="section-title">SONG SUCHEN & HINZUFÜGEN</span>
-      </div>
-      <div class="search-bar">
-        <input type="text" id="searchInput" class="neon-input search-input"
-          placeholder="Song oder Künstler suchen...">
-        <button id="searchBtn" class="neon-btn primary">SUCHEN</button>
-      </div>
-      <div id="searchResults" class="search-results"></div>
-    </div>
+      </div><!-- end right-panel -->
 
-    <!-- ─── PARTY PLAYLIST ─── -->
-    <div class="playlist-section">
-      <div class="section-header">
-        <span class="section-icon">🎉</span>
-        <span class="section-title">PARTY PLAYLIST</span>
-        <span id="trackCount" class="track-count">0 Songs</span>
-      </div>
-      <div id="adminPlaylistControls" class="admin-controls hidden">
-        <button id="playPlaylistBtn" class="neon-btn primary small-btn">▶ PLAYLIST ABSPIELEN</button>
-        <button id="clearPlaylistBtn" class="neon-btn danger small-btn">🗑 ALLES LÖSCHEN</button>
-      </div>
-      <div id="partyPlaylist" class="playlist-container">
-        <div class="empty-state">
-          <span class="empty-icon">🎵</span>
-          <span>Noch keine Songs! Sei der Erste!</span>
-        </div>
-      </div>
-    </div>
+    </div><!-- end app-columns -->
 
   </div><!-- end mainApp -->
 
