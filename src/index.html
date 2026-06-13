@@ -196,10 +196,15 @@
               <span class="section-title playlist-title-text">PARTY PLAYLIST</span>
               <span id="trackCount" class="track-count">0 Songs</span>
             </div>
-            <div id="adminPlaylistControls" class="admin-controls-inline hidden">
+          </div>
+          <div id="adminPlaylistControls" class="admin-controls-stack hidden">
+            <div class="admin-btn-row">
               <button id="playPlaylistBtn" class="neon-btn primary small-btn">▶ ABSPIELEN</button>
-              <button id="newPlaylistBtn" class="neon-btn secondary small-btn">✨ NEUE</button>
               <button id="clearPlaylistBtn" class="neon-btn danger small-btn">🗑 LÖSCHEN</button>
+            </div>
+            <div class="admin-btn-row">
+              <button id="newPlaylistBtn" class="neon-btn secondary small-btn">✨ NEUE</button>
+              <button id="openPlaylistBtn" class="neon-btn secondary small-btn">📂 ÖFFNEN</button>
             </div>
           </div>
         </div>
@@ -251,6 +256,22 @@
           <button id="changePasswordBtn" class="neon-btn primary">SPEICHERN</button>
           <button id="cancelChangePwBtn" class="neon-btn secondary">ZURÜCK</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- PLAYLIST PICKER MODAL -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="playlistPickerModal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-wide">
+      <div class="modal-header">
+        <span class="modal-title">📂 PLAYLIST ÖFFNEN</span>
+        <button id="playlistPickerClose" class="modal-close-btn">✕</button>
+      </div>
+      <p class="modal-text">Wähle eine deiner Playlists als aktive Party Playlist:</p>
+      <div id="playlistPickerList" class="playlist-picker-list">
+        <div class="picker-loading"><span class="spinner"></span> Lade Playlists...</div>
       </div>
     </div>
   </div>

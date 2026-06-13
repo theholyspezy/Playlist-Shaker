@@ -240,7 +240,14 @@ function bindMainApp() {
   // Admin playlist controls
   $('playPlaylistBtn').onclick  = playPartyPlaylist
   $('newPlaylistBtn').onclick   = newPartyPlaylist
+  $('openPlaylistBtn').onclick  = openPlaylistPicker
   $('clearPlaylistBtn').onclick = clearPartyPlaylist
+
+  // Playlist picker modal
+  $('playlistPickerClose').onclick = () => $('playlistPickerModal').classList.add('hidden')
+  $('playlistPickerModal').addEventListener('click', e => {
+    if (e.target === $('playlistPickerModal')) $('playlistPickerModal').classList.add('hidden')
+  })
 
   // Logout
   $('logoutBtn').onclick = async () => {
@@ -327,6 +334,70 @@ async function newPartyPlaylist() {
   state.partyPlaylistId = null
   state.playlistTracks = []
   await createPartyPlaylist()
+}
+
+// Admin: open the picker to choose an existing Spotify playlist as the active one
+async function openPlaylistPicker() {
+  const modal = $('playlistPickerModal')
+  const list = $('playlistPickerList')
+  list.innerHTML = '<div class="picker-loading"><span class="spinner"></span> Lade Playlists...</div>'
+  modal.classList.remove('hidden')
+
+  try {
+    const playlists = []
+    let nextUrl = '/me/playlists?limit=50'
+    while (nextUrl) {
+      const data = await api.spotifyGet(nextUrl)
+      if (!data || !data.items) break
+      playlists.push(...data.items.filter(p => p && p.id))
+      nextUrl = data.next || null
+    }
+    renderPlaylistPicker(playlists)
+  } catch (err) {
+    list.innerHTML = `<div class="picker-empty">Fehler beim Laden: ${escapeHtml(err.message)}</div>`
+  }
+}
+
+function renderPlaylistPicker(playlists) {
+  const list = $('playlistPickerList')
+  if (playlists.length === 0) {
+    list.innerHTML = '<div class="picker-empty">Keine Playlists gefunden.</div>'
+    return
+  }
+
+  list.innerHTML = ''
+  playlists.forEach(pl => {
+    const isActive = pl.id === state.partyPlaylistId
+    const art = (pl.images && pl.images.length > 0)
+      ? `<img class="picker-art" src="${pl.images[pl.images.length - 1].url}" alt="">`
+      : `<div class="picker-art-placeholder">🎵</div>`
+    const total = pl.tracks ? pl.tracks.total : 0
+    const owner = pl.owner ? (pl.owner.display_name || pl.owner.id) : ''
+
+    const div = document.createElement('div')
+    div.className = `picker-item${isActive ? ' active' : ''}`
+    div.innerHTML = `
+      ${art}
+      <div class="picker-info">
+        <div class="picker-name">${escapeHtml(pl.name || 'Ohne Titel')}</div>
+        <div class="picker-meta">${total} Songs${owner ? ' · ' + escapeHtml(owner) : ''}</div>
+      </div>
+      ${isActive ? '<span class="picker-active-badge">AKTIV</span>' : ''}
+    `
+    div.onclick = () => setActivePlaylist(pl)
+    list.appendChild(div)
+  })
+}
+
+async function setActivePlaylist(pl) {
+  state.partyPlaylistId = pl.id
+  state.partyPlaylistSnapshot = pl.snapshot_id || null
+  state.playlistTracks = []
+  await api.setConfig('partyPlaylistId', pl.id)
+  $('playlistPickerModal').classList.add('hidden')
+  renderPlaylist()
+  await loadPlaylistTracks()
+  showToast(`📂 "${pl.name}" geöffnet`, 'success')
 }
 
 function renderPlaylistCreationFailed() {

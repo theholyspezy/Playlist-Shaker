@@ -945,11 +945,23 @@ body {
   flex-shrink: 0;
 }
 
-/* Admin controls inline in playlist header */
-.admin-controls-inline {
+/* Admin controls stacked below the title in the playlist header */
+.admin-controls-stack {
   display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.admin-btn-row {
+  display: flex;
+  gap: 6px;
+}
+
+.admin-btn-row .neon-btn {
+  flex: 1;
+  padding: 6px 4px;
+  white-space: nowrap;
 }
 
 /* Playlist fills remaining right-panel height */
@@ -1151,9 +1163,106 @@ body {
   animation: modal-in .2s ease-out;
 }
 
+.modal-box-wide {
+  width: 460px;
+}
+
 @keyframes modal-in {
   from { transform: scale(.9); opacity: 0; }
   to   { transform: scale(1);  opacity: 1; }
+}
+
+/* ── Playlist Picker ──────────────────────────────────── */
+.playlist-picker-list {
+  margin-top: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.picker-loading,
+.picker-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.picker-item:hover {
+  background: var(--bg2);
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(0,255,245,.2);
+}
+
+.picker-item.active {
+  border-color: var(--green);
+  background: rgba(57,255,20,.06);
+}
+
+.picker-art {
+  width: 40px;
+  height: 40px;
+  border-radius: 3px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.picker-art-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 3px;
+  background: var(--bg3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.picker-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-name {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.picker-meta {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.picker-active-badge {
+  font-family: var(--font-retro);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 3px;
+  padding: 2px 6px;
+  flex-shrink: 0;
 }
 
 .modal-header {
