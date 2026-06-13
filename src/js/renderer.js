@@ -287,9 +287,11 @@ async function loadUserProfile() {
     state.userId = me.id
     await api.setConfig('userId', me.id)
     $('userName').textContent = me.display_name || me.id
+    const avatar = $('userAvatar')
+    avatar.onerror = () => { avatar.style.display = 'none' }
     if (me.images && me.images.length > 0) {
-      $('userAvatar').src = me.images[0].url
-      $('userAvatar').classList.remove('hidden')
+      avatar.src = me.images[0].url
+      avatar.classList.remove('hidden')
     }
   } catch (err) {
     console.error('Profile load failed:', err)
@@ -735,36 +737,70 @@ function renderSearchResults(tracks) {
 }
 
 // ── Playlist Management ───────────────────────────────────
+async function postTrack(uri) {
+  const data = await api.spotifyPost(
+    `/playlists/${state.partyPlaylistId}/tracks`,
+    { uris: [uri] }
+  )
+  state.partyPlaylistSnapshot = data.snapshot_id
+  await loadPlaylistTracks()
+}
+
 async function addTrackToPlaylist(uri) {
   if (!state.partyPlaylistId) {
-    showToast('Keine Party Playlist vorhanden', 'error')
-    return false
+    await createPartyPlaylist()
+    if (!state.partyPlaylistId) return false
   }
 
   try {
-    const data = await api.spotifyPost(
-      `/playlists/${state.partyPlaylistId}/tracks`,
-      { uris: [uri] }
-    )
-    state.partyPlaylistSnapshot = data.snapshot_id
-    await loadPlaylistTracks()
+    await postTrack(uri)
     showToast('🎵 Song zur Party Playlist hinzugefügt!', 'success')
     return true
   } catch (err) {
-    if (err.message.includes('403')) {
-      await handleWriteForbidden()
-    } else {
+    if (!err.message.includes('403')) {
       showToast('Fehler beim Hinzufügen: ' + err.message, 'error')
+      return false
     }
+
+    // 403 on write. Scopes are fine, so the active playlist almost certainly
+    // isn't owned by the logged-in user. Verify, then auto-heal by creating a
+    // fresh own playlist and retrying once.
+    const owned = await isPlaylistOwnedByUser(state.partyPlaylistId)
+    console.warn('Add 403 — playlist', state.partyPlaylistId, 'owned by user:', owned, '| userId:', state.userId)
+
+    if (!owned) {
+      showToast('Aktive Playlist gehört dir nicht – erstelle eine neue eigene…', 'warning')
+      await createPartyPlaylist()
+      try {
+        await postTrack(uri)
+        showToast('🎵 Song zur neuen Playlist hinzugefügt!', 'success')
+        return true
+      } catch (err2) {
+        await handleWriteForbidden(err2)
+        return false
+      }
+    }
+
+    // Owned but still forbidden – surface the granted scopes for diagnosis
+    await handleWriteForbidden(err)
     return false
   }
 }
 
-// Shown when Spotify refuses a write (403). Almost always a missing-scope token.
-async function handleWriteForbidden() {
+async function isPlaylistOwnedByUser(playlistId) {
+  try {
+    const pl = await api.spotifyGet(`/playlists/${playlistId}`)
+    return !!(pl && pl.owner && pl.owner.id === state.userId)
+  } catch {
+    return false
+  }
+}
+
+// Shown when Spotify refuses a write (403) even though we own the playlist.
+async function handleWriteForbidden(err) {
   const scopes = await api.getConfig('grantedScopes')
-  console.warn('Granted scopes:', scopes)
-  showToast('403 Schreibzugriff verweigert. Erteilte Rechte: ' + (scopes || '(KEINE – bitte neu einloggen)'), 'error', 9000)
+  console.warn('Write forbidden. Granted scopes:', scopes, '| error:', err && err.message)
+  showToast('403 Schreibzugriff verweigert (Playlist gehört dir, Rechte vorhanden). Bitte LOGOUT + neu einloggen.', 'error', 9000)
 }
 
 async function removeTrackFromPlaylist(uri, index) {
