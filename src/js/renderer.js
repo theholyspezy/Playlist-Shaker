@@ -494,9 +494,11 @@ async function createPartyPlaylist() {
 // Admin: create a brand-new empty party playlist (the old one stays in the
 // user's Spotify account but is no longer tracked here)
 async function newPartyPlaylist() {
-  if (!confirm('Neue, leere Party Playlist erstellen?\n\nDie aktuelle Playlist bleibt in deinem Spotify-Account erhalten, wird hier aber nicht mehr angezeigt.')) {
-    return
-  }
+  const ok = await confirmDialog(
+    'Neue, leere Party Playlist erstellen?\n\nDie aktuelle Playlist bleibt in deinem Spotify-Account erhalten, wird hier aber nicht mehr angezeigt.',
+    { okLabel: 'Erstellen' }
+  )
+  if (!ok) return
   await api.setConfig('partyPlaylistId', null)
   state.partyPlaylistId = null
   state.playlistTracks = []
@@ -1101,7 +1103,7 @@ async function clearPartyPlaylist() {
   if (!state.partyPlaylistId) return
   if (state.playlistTracks.length === 0) return
 
-  if (!confirm('Alle Songs aus der Party Playlist löschen?')) return
+  if (!await confirmDialog('Alle Songs aus der Party Playlist löschen?', { okLabel: 'Löschen' })) return
 
   try {
     await replacePlaylistItems([])
@@ -1391,6 +1393,36 @@ function escapeHtml(str) {
 }
 
 let toastTimer = null
+// In-app confirmation dialog. Replaces the native window.confirm(), which on
+// Electron leaves the WebContents without input focus after it closes — that
+// made text fields (e.g. the search box) unclickable until the window was
+// blurred and refocused. This custom dialog keeps focus inside the renderer.
+function confirmDialog(message, { okLabel = 'OK', cancelLabel = 'Abbrechen' } = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div')
+    overlay.className = 'modal-overlay'
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <p class="modal-text" style="white-space:pre-line">${escapeHtml(message)}</p>
+        <div class="modal-actions">
+          <button class="neon-btn primary confirm-ok">${escapeHtml(okLabel)}</button>
+          <button class="neon-btn secondary confirm-cancel">${escapeHtml(cancelLabel)}</button>
+        </div>
+      </div>
+    `
+    document.body.appendChild(overlay)
+
+    const close = (result) => {
+      overlay.remove()
+      resolve(result)
+    }
+    overlay.querySelector('.confirm-ok').onclick = () => close(true)
+    overlay.querySelector('.confirm-cancel').onclick = () => close(false)
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(false) })
+    overlay.querySelector('.confirm-ok').focus()
+  })
+}
+
 function showToast(message, type = '', duration = 3200) {
   const toast = $('toast')
   toast.textContent = message
