@@ -17,6 +17,7 @@ const state = {
   volumeThrottle: null,
   dragSrcIndex: null,
   searchDebounce: null,
+  autoHealedThisSession: false,
 }
 
 // ── DOM refs ───────────────────────────────────────────────
@@ -331,12 +332,13 @@ async function createPartyPlaylist() {
     const now = new Date()
     const dateStr = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
     // Use /me/playlists – does not require a user ID and avoids permission edge cases.
-    // Create as PRIVATE: only needs playlist-modify-private, the least-privileged
-    // write scope, which avoids 403s when modify-public isn't effectively granted.
+    // Create as PUBLIC (the original, working behaviour): adding tracks to a
+    // public playlist you own works reliably. Switching this to private was a
+    // regression that caused 403 Forbidden on adding tracks.
     const pl = await api.spotifyPost('/me/playlists', {
       name: `Party Shaker - ${dateStr}`,
       description: 'Party Playlist - erstellt mit Party Shaker 2000',
-      public: false,
+      public: true,
     })
     if (!pl || !pl.id) throw new Error('Ungültige API-Antwort: ' + JSON.stringify(pl))
     state.partyPlaylistId = pl.id
@@ -825,14 +827,17 @@ async function addTrackToPlaylist(uri) {
       return false
     }
 
-    // 403 on write. Scopes are fine, so the active playlist almost certainly
-    // isn't owned by the logged-in user. Verify, then auto-heal by creating a
-    // fresh own playlist and retrying once.
+    // 403 on write. Two known causes: the active playlist isn't owned by us, or
+    // it was created in a non-writable state by an older app version (a private
+    // playlist saved in config). Both are healed the same way: create a fresh
+    // PUBLIC playlist and retry once. Guarded to a single attempt per session so
+    // a genuine Spotify-side block doesn't spawn a new playlist on every click.
     const owned = await isPlaylistOwnedByUser(state.partyPlaylistId)
-    console.warn('Add 403 — playlist', state.partyPlaylistId, 'owned by user:', owned, '| userId:', state.userId)
+    console.warn('Add 403 — playlist', state.partyPlaylistId, 'owned:', owned, '| userId:', state.userId, '| healed:', state.autoHealedThisSession)
 
-    if (!owned) {
-      showToast('Aktive Playlist gehört dir nicht – erstelle eine neue eigene…', 'warning')
+    if (!state.autoHealedThisSession) {
+      state.autoHealedThisSession = true
+      showToast('Erstelle eine frische, öffentliche Party Playlist…', 'warning')
       await createPartyPlaylist()
       try {
         await postTrack(uri)
@@ -844,7 +849,7 @@ async function addTrackToPlaylist(uri) {
       }
     }
 
-    // Owned but still forbidden – surface the granted scopes for diagnosis
+    // Already healed once this session and still forbidden – it's Spotify-side.
     await handleWriteForbidden(err)
     return false
   }
