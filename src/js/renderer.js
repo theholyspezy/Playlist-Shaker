@@ -1318,7 +1318,7 @@ function bindSeekBar() {
 function enterAdminMode() {
   state.isAdmin = true
   $('adminBadge').classList.remove('hidden')
-  $('adminToggleBtn').textContent = '🔓 ADMIN AN'
+  $('adminToggleBtn').textContent = '🔓 ADMINMODUS AUSSCHALTEN'
   $('adminToggleBtn').classList.add('primary')
   $('adminToggleBtn').classList.remove('secondary')
   $('adminPlaylistControls').classList.remove('hidden')
