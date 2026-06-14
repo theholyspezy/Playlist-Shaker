@@ -526,9 +526,9 @@ body {
 
 /* Album Art */
 .album-art-wrap {
-  width: 100px;
-  height: 100px;
-  min-width: 100px;
+  width: 170px;
+  height: 170px;
+  min-width: 170px;
   border-radius: var(--radius);
   overflow: hidden;
   border: 2px solid var(--purple);
@@ -653,7 +653,7 @@ body {
 
 /* Equalizer */
 .equalizer-wrap {
-  height: 32px;
+  height: 54px;
   overflow: hidden;
 }
 

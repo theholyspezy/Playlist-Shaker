@@ -55,20 +55,20 @@ function showScreen(id) {
 let eqRaf = null
 let eqClock = 0
 const EQ_BARS = 24
-// Per-bar config: phase offset and frequency multipliers for bass/mid/treble bands
+const EQ_MAX_H = 48
+// Spectrum layout (as requested): LEFT bars = high frequencies (fast, short,
+// flickery), RIGHT bars = low frequencies (slow, tall, with a bass "kick").
+// `f` is "bassness": 1 at the right edge (lows), 0 at the left edge (highs).
 const eqBarCfg = Array.from({ length: EQ_BARS }, (_, i) => {
-  const pos = i / (EQ_BARS - 1) // 0 = left/bass, 1 = right/treble
+  const pos = i / (EQ_BARS - 1)
+  const f = 1 - pos
   return {
-    phase: i * 0.38,
-    // Bass: slow & tall on the left, fades right
-    bassFreq: 0.6 + pos * 0.3,
-    bassAmp:  (1 - pos) * 20 + 4,
-    // Mid: dominant in the middle
-    midFreq:  1.4 + pos * 0.8,
-    midAmp:   12 - Math.abs(pos - 0.5) * 16,
-    // Treble: fast & small on the right
-    trebFreq: 3.0 + pos * 3.0,
-    trebAmp:  pos * 10,
+    phase: i * 0.5,
+    speed: 1.0 + (1 - f) * 5.0,   // treble (left) oscillates fast, bass (right) slow
+    amp:   8 + f * 32,            // bass (right) reaches higher than treble (left)
+    kick:  f * f * 30,            // the beat pulse mainly drives the bass (right) bars
+    noise: (1 - f) * 14 + 2,      // treble (left) flickers more
+    ease:  0.30 + (1 - f) * 0.45, // treble snaps quickly, bass swells smoothly
   }
 })
 
@@ -92,23 +92,29 @@ function buildEqualizer() {
 
 function runEqualizer() {
   const bars = $('equalizer').querySelectorAll('.eq-bar')
-  eqClock += state.isPlaying ? 0.04 : 0
+  eqClock += state.isPlaying ? 0.05 : 0
+  // Sharp periodic "kick" (simulated beat) that mostly drives the bass (right) bars
+  const beat = Math.pow(Math.max(0, Math.sin(eqClock * 2.0)), 6)
 
   bars.forEach((bar, i) => {
     const cfg = eqBarCfg[i]
-    let h
+    const prev = parseFloat(bar.style.height) || 3
+    let target
     if (!state.isPlaying) {
-      // Smooth decay to floor when paused
-      h = Math.max(3, (parseFloat(bar.style.height) || 3) * 0.88)
+      target = 3
     } else {
-      // Overlapping sine waves simulate bass / mid / treble bands
-      h = 3
-        + Math.abs(Math.sin(eqClock * cfg.bassFreq + cfg.phase))          * cfg.bassAmp
-        + Math.abs(Math.sin(eqClock * cfg.midFreq  + cfg.phase * 1.7))    * Math.max(0, cfg.midAmp)
-        + Math.abs(Math.sin(eqClock * cfg.trebFreq + cfg.phase * 2.4))    * cfg.trebAmp
-        + (Math.random() < 0.04 ? Math.random() * 7 : 0) // occasional spike
-      h = Math.min(30, Math.max(3, h))
+      // Two overlapping waves per band give an irregular, music-like motion
+      const wave =
+          Math.abs(Math.sin(eqClock * cfg.speed + cfg.phase))           * 0.65
+        + Math.abs(Math.sin(eqClock * cfg.speed * 1.7 + cfg.phase * 1.4)) * 0.35
+      target = 3
+        + wave * cfg.amp
+        + beat * cfg.kick
+        + (Math.random() < 0.06 ? Math.random() * cfg.noise : 0)
     }
+    // Ease toward the target: treble snaps, bass swells, all decay smoothly on pause
+    const ease = state.isPlaying ? cfg.ease : 0.12
+    const h = Math.min(EQ_MAX_H, Math.max(3, prev + (target - prev) * ease))
     bar.style.height = h + 'px'
   })
 
