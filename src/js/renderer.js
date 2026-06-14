@@ -148,12 +148,12 @@ function runEqualizer() {
         + beat * cfg.kick
         + (Math.random() < 0.06 ? Math.random() * cfg.noise : 0)
     }
-    // Asymmetric easing in live mode: moderate attack (rise) so peaks don't
-    // snap instantly, slow release (fall) so each hit produces a big, visible
-    // swing that decays like a VU meter. Falls back to the old easing otherwise.
+    // Fast, snappy easing in live mode: quick rise AND quick fall so the bars
+    // make distinct jumps and drop back immediately instead of lingering at the
+    // top. Attack a touch faster than release. Falls back to old easing otherwise.
     let ease
     if (live) {
-      ease = target > prev ? 0.45 : 0.14
+      ease = target > prev ? 0.7 : 0.5
     } else {
       ease = state.isPlaying ? cfg.ease : 0.12
     }
@@ -221,8 +221,8 @@ async function initAudioAnalyser() {
     const src = eqAudioCtx.createMediaStreamSource(stream)
     const analyser = eqAudioCtx.createAnalyser()
     analyser.fftSize = 512
-    // Less smoothing so beats/transients punch through (more movement)
-    analyser.smoothingTimeConstant = 0.55
+    // Low smoothing so values fall back quickly between beats (snappy movement)
+    analyser.smoothingTimeConstant = 0.35
     src.connect(analyser)
     eqAnalyser = analyser
     eqFreqData = new Uint8Array(analyser.frequencyBinCount)
