@@ -604,11 +604,11 @@ body {
 }
 
 #lcdTrackText {
-  font-family: var(--font-lcd);
-  font-size: 22px;
+  font-family: 'Audiowide', sans-serif;
+  font-size: 18px;
   color: var(--green);
   text-shadow: var(--glow-g);
-  letter-spacing: 1px;
+  letter-spacing: .5px;
 }
 
 .lcd-artist {
