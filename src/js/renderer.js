@@ -465,21 +465,32 @@ async function loadPlaylistTracks() {
     const pl = await api.spotifyGet(`/playlists/${state.partyPlaylistId}`)
     if (pl && pl.snapshot_id) state.partyPlaylistSnapshot = pl.snapshot_id
 
+    // Post-migration each entry is `.item`; pre-migration it was `.track`.
     const collect = items => {
-      for (const item of (items || [])) {
-        if (item && item.track && item.track.id) tracks.push(item.track)
+      for (const entry of (items || [])) {
+        const t = entry && (entry.item || entry.track)
+        if (t && t.id) tracks.push(t)
       }
     }
 
-    let page = pl && pl.tracks ? pl.tracks : null
+    // The playlist object embeds its items under `items` (new) or `tracks`
+    // (old). If neither is present, fetch the dedicated /items endpoint.
+    let page = pl && (pl.items || pl.tracks) ? (pl.items || pl.tracks) : null
+    if (!page || !page.items) {
+      try { page = await api.spotifyGet(`/playlists/${state.partyPlaylistId}/items`) }
+      catch (e) { console.warn('items endpoint read failed:', e.message) }
+    }
     collect(page && page.items)
 
     // Follow pagination if the playlist has more than 100 tracks. If a page
     // request fails (e.g. 403 on the tracks endpoint), keep what we already have.
+    // Follow pagination. Spotify's `next` URL still points to /tracks on old
+    // responses; rewrite it to /items to stay on the new endpoint.
     let nextUrl = page ? page.next : null
     while (nextUrl) {
       try {
-        const data = await api.spotifyGet(nextUrl)
+        const safeUrl = nextUrl.replace(/\/playlists\/([^/]+)\/tracks/, '/playlists/$1/items')
+        const data = await api.spotifyGet(safeUrl)
         collect(data && data.items)
         nextUrl = data ? data.next : null
       } catch (pageErr) {
@@ -783,8 +794,10 @@ async function addTrackToPlaylist(uri) {
   }
 
   try {
+    // Spotify's March 2026 migration replaced /playlists/{id}/tracks with
+    // /playlists/{id}/items (the old path now returns 403 for dev-mode apps).
     const data = await api.spotifyPost(
-      `/playlists/${state.partyPlaylistId}/tracks`,
+      `/playlists/${state.partyPlaylistId}/items`,
       { uris: [uri] }
     )
     state.partyPlaylistSnapshot = data && data.snapshot_id
@@ -851,7 +864,7 @@ async function removeTrackFromPlaylist(uri, index) {
   if (!state.partyPlaylistId) return
   try {
     const data = await api.spotifyDelete(
-      `/playlists/${state.partyPlaylistId}/tracks`,
+      `/playlists/${state.partyPlaylistId}/items`,
       {
         tracks: [{ uri }],
         snapshot_id: state.partyPlaylistSnapshot,
@@ -880,7 +893,7 @@ async function reorderPlaylistTrack(fromIndex, toIndex) {
   try {
     const insertBefore = toIndex > fromIndex ? toIndex + 1 : toIndex
     const data = await api.spotifyPut(
-      `/playlists/${state.partyPlaylistId}/tracks`,
+      `/playlists/${state.partyPlaylistId}/items`,
       {
         range_start: fromIndex,
         insert_before: insertBefore,
@@ -905,7 +918,7 @@ async function clearPartyPlaylist() {
   try {
     const tracks = state.playlistTracks.map(t => ({ uri: t.uri }))
     await api.spotifyDelete(
-      `/playlists/${state.partyPlaylistId}/tracks`,
+      `/playlists/${state.partyPlaylistId}/items`,
       { tracks, snapshot_id: state.partyPlaylistSnapshot }
     )
     state.playlistTracks = []
