@@ -325,6 +325,48 @@ async function startMainApp() {
     }
     document.addEventListener('click', retry)
   }
+
+  // After a short settle, check if Spotify is playing anywhere.
+  // If not, launch it silently on a hidden virtual desktop.
+  setTimeout(checkAndAutoStartSpotify, 2000)
+}
+
+async function checkAndAutoStartSpotify() {
+  try {
+    const player = await api.spotifyGet('/me/player')
+    if (player && player.device) return  // already playing somewhere — nothing to do
+  } catch { /* ignore — treat as "no device" */ }
+
+  showToast('🎵 Kein Spotify-Gerät gefunden – starte Spotify im Hintergrund...', '', 6000)
+
+  const result = await api.autoStartSpotify()
+
+  if (!result || result.status === 'unsupported') {
+    showToast('ℹ️ Automatischer Start nur unter Windows verfügbar', 'warning')
+    return
+  }
+  if (result.status === 'error') {
+    showToast('⚠️ Spotify-Autostart fehlgeschlagen: ' + result.message, 'error')
+    return
+  }
+
+  // Poll up to ~20 s for Spotify to appear as an active device
+  showToast('⏳ Warte auf Spotify-Verbindung...', '', 5000)
+  let attempts = 0
+  const check = setInterval(async () => {
+    attempts++
+    try {
+      const p = await api.spotifyGet('/me/player')
+      if (p && p.device) {
+        clearInterval(check)
+        showToast('✅ Spotify verbunden – Wiedergabe läuft im Hintergrund', 'success')
+      }
+    } catch { /* continue polling */ }
+    if (attempts >= 10) {
+      clearInterval(check)
+      showToast('ℹ️ Spotify nicht erkannt – bitte manuell starten', 'warning')
+    }
+  }, 2000)
 }
 
 function bindMainApp() {

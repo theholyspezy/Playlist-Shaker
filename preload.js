@@ -32,4 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowMinimize: () => ipcRenderer.invoke('window-minimize'),
   windowMaximize: () => ipcRenderer.invoke('window-maximize'),
   windowClose: () => ipcRenderer.invoke('window-close'),
+
+  // Auto-start Spotify on a hidden virtual desktop
+  autoStartSpotify: () => ipcRenderer.invoke('auto-start-spotify'),
 })

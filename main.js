@@ -3,6 +3,8 @@ const path = require('path')
 const http = require('http')
 const https = require('https')
 const crypto = require('crypto')
+const { exec } = require('child_process')
+const os = require('os')
 const fs = require('fs')
 
 const SPOTIFY_REDIRECT_URI = 'http://127.0.0.1:8888/callback'
@@ -444,3 +446,67 @@ ipcMain.handle('window-maximize', () => {
 })
 
 ipcMain.handle('window-close', () => mainWindow.close())
+
+// Launch Spotify on a hidden virtual desktop so the Party Shaker window
+// stays in focus. Uses PowerShell + Win32 keybd_event to:
+//   1. Ctrl+Win+D  → create & switch to a new virtual desktop
+//   2. spotify:    → start the Spotify app (falls back to web player)
+//   3. Media Play  → begin playback (VK_MEDIA_PLAY_PAUSE = 0xB3)
+//   4. Ctrl+Win+←  → switch back to the original desktop
+// Only runs on Windows; resolves immediately on other platforms.
+ipcMain.handle('auto-start-spotify', async () => {
+  if (process.platform !== 'win32') return { status: 'unsupported' }
+
+  const psScript = `
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class WinKey {
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr extra);
+    public static void Down(byte k) { keybd_event(k, 0, 0, UIntPtr.Zero); }
+    public static void Up(byte k)   { keybd_event(k, 0, 2, UIntPtr.Zero); }
+    public static void Press(byte k) { Down(k); System.Threading.Thread.Sleep(60); Up(k); }
+    public static void Combo(byte[] keys) {
+        foreach (var k in keys) Down(k);
+        System.Threading.Thread.Sleep(150);
+        Array.Reverse(keys);
+        foreach (var k in keys) Up(k);
+    }
+}
+'@
+
+# 1. Neuen virtuellen Desktop erstellen und dorthin wechseln (Strg+Win+D)
+[WinKey]::Combo(@([byte]0xA2, [byte]0x5B, [byte]0x44))
+Start-Sleep -Milliseconds 900
+
+# 2. Spotify starten – Desktop-App via URI, sonst Web-Player
+$spotifyRunning = Get-Process -Name "Spotify" -ErrorAction SilentlyContinue
+if (-not $spotifyRunning) {
+    Start-Process "spotify:"
+}
+Start-Sleep -Seconds 4
+
+# 3. Media-Play-Taste senden (VK_MEDIA_PLAY_PAUSE = 0xB3)
+[WinKey]::Press([byte]0xB3)
+Start-Sleep -Milliseconds 600
+
+# 4. Zurueck zum urspruenglichen Desktop (Strg+Win+Pfeil-Links)
+[WinKey]::Combo(@([byte]0xA2, [byte]0x5B, [byte]0x25))
+`
+
+  const scriptPath = path.join(os.tmpdir(), 'party-shaker-autostart.ps1')
+  require('fs').writeFileSync(scriptPath, psScript, 'utf8')
+
+  return new Promise((resolve) => {
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
+      { timeout: 15000 },
+      (err) => {
+        try { require('fs').unlinkSync(scriptPath) } catch { /* ignore */ }
+        if (err) resolve({ status: 'error', message: err.message })
+        else resolve({ status: 'ok' })
+      }
+    )
+  })
+})
