@@ -17,6 +17,7 @@ const state = {
   isSeeking: false,
   pollingTimer: null,
   volumeThrottle: null,
+  volumeTouchedAt: 0,
   dragSrcIndex: null,
   searchDebounce: null,
   autoHealedThisSession: false,
@@ -333,6 +334,7 @@ function bindMainApp() {
   $('volumeSlider').oninput = e => {
     const vol = e.target.value
     $('volValue').textContent = vol
+    state.volumeTouchedAt = Date.now() // suppress polling overwrite for a moment
     clearTimeout(state.volumeThrottle)
     state.volumeThrottle = setTimeout(() => setVolume(vol), 300)
   }
@@ -342,6 +344,7 @@ function bindMainApp() {
     const newVol = slider.value === '0' ? '70' : '0'
     slider.value = newVol
     $('volValue').textContent = newVol
+    state.volumeTouchedAt = Date.now()
     setVolume(newVol)
   }
 
@@ -729,7 +732,10 @@ function updatePlayerDisplay(data) {
   }
 
   // Volume
-  if (data.device && data.device.volume_percent != null) {
+  // Only sync the slider from the device when the user hasn't touched it
+  // recently — otherwise a poll can read a stale value and snap it back.
+  if (data.device && data.device.volume_percent != null &&
+      Date.now() - state.volumeTouchedAt > 4000) {
     const vol = data.device.volume_percent
     $('volumeSlider').value = vol
     $('volValue').textContent = vol
