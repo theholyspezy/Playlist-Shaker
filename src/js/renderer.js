@@ -81,25 +81,18 @@ const eqBarCfg = Array.from({ length: EQ_BARS }, (_, i) => {
   }
 })
 
-// Colour by amplitude (VU style): green (low) → yellow → orange → red (peak)
-function eqColor(norm) {
-  const hue = 140 - Math.min(1, Math.max(0, norm)) * 140 // 140=green … 0=red
-  return `hsl(${hue}, 100%, 55%)`
-}
-
-// Vertical mirror gradient: the bar's colour glows in the centre and fades out
-// toward the top and bottom, so the centred bar reads as a reflection.
-function eqBackground(norm) {
-  const c = eqColor(norm)
-  return `linear-gradient(to bottom, transparent 0%, ${c} 26%, #ffffff 50%, ${c} 74%, transparent 100%)`
-}
-
 function buildEqualizer() {
   const eq = $('equalizer')
+  const colors = [
+    '#39ff14','#00fff5','#0080ff','#9d00ff','#ff2d9e','#ff8800',
+    '#ffe600','#39ff14','#00fff5','#0080ff','#9d00ff','#ff2d9e',
+    '#ff8800','#ffe600','#39ff14','#00fff5','#0080ff','#9d00ff',
+    '#ff2d9e','#ff8800','#ffe600','#39ff14','#00fff5','#0080ff',
+  ]
   for (let i = 0; i < EQ_BARS; i++) {
     const bar = document.createElement('div')
     bar.className = 'eq-bar'
-    bar.style.background = eqBackground(0)
+    bar.style.background = `linear-gradient(to top, ${colors[i]}, rgba(255,255,255,.55))`
     bar.style.height = '3px'
     eq.appendChild(bar)
   }
@@ -167,7 +160,6 @@ function runEqualizer() {
     }
     const h = Math.min(EQ_MAX_H, Math.max(3, prev + (target - prev) * ease))
     bar.style.height = h + 'px'
-    bar.style.background = eqBackground((h - 3) / (EQ_MAX_H - 3))
   })
 
   eqRaf = requestAnimationFrame(runEqualizer)
@@ -191,7 +183,12 @@ function buildEqBinMap(binCount) {
     const lo = Math.floor(minBin * Math.pow(usable / minBin, k / EQ_BARS))
     let hi = Math.floor(minBin * Math.pow(usable / minBin, (k + 1) / EQ_BARS))
     if (hi <= lo) hi = lo + 1
-    ranges.push([lo, hi])
+    // Use only the centre 44% of each band, leaving spectral gaps between bars
+    // so neighbouring energy doesn't bleed through and push bars up constantly.
+    const span = hi - lo
+    const sLo = lo + Math.floor(span * 0.28)
+    const sHi = lo + Math.ceil(span * 0.72)
+    ranges.push([sLo, Math.max(sHi, sLo + 1)])
   }
   return ranges
 }

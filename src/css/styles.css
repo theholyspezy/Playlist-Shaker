@@ -689,7 +689,7 @@ body {
 
 .equalizer {
   display: flex;
-  align-items: center;       /* centered: bars grow up AND down (mirror) */
+  align-items: flex-end;
   gap: 2px;
   height: 100%;
   padding: 0 2px;
@@ -699,8 +699,7 @@ body {
   flex: 1;
   min-height: 3px;
   height: 3px;
-  border-radius: 2px;
-  /* height & color driven by JS requestAnimationFrame (mirror + amplitude hue) */
+  border-radius: 2px 2px 0 0;
 }
 
 /* Player Controls */
