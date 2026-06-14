@@ -408,7 +408,10 @@ function renderPlaylistPicker(playlists) {
     const art = (pl.images && pl.images.length > 0)
       ? `<img class="picker-art" src="${pl.images[pl.images.length - 1].url}" alt="">`
       : `<div class="picker-art-placeholder">🎵</div>`
-    const total = (pl.tracks && typeof pl.tracks.total === 'number') ? pl.tracks.total : null
+    // Post-migration playlists expose their item count under `items.total`;
+    // older responses used `tracks.total`.
+    const countObj = pl.items || pl.tracks
+    const total = (countObj && typeof countObj.total === 'number') ? countObj.total : null
     const countLabel = total === null ? '' : `${total} Songs`
     const owner = pl.owner ? (pl.owner.display_name || pl.owner.id) : ''
     const meta = [countLabel, owner ? escapeHtml(owner) : ''].filter(Boolean).join(' · ')
@@ -458,10 +461,9 @@ async function loadPlaylistTracks() {
   if (!state.partyPlaylistId) return
   try {
     const tracks = []
-    // Read tracks from the playlist object itself. The /playlists/{id} endpoint
-    // works reliably, whereas the /playlists/{id}/tracks sub-endpoint can return
-    // 403 in some Spotify app configurations. The playlist object already embeds
-    // the first 100 tracks plus a `next` link for further pages.
+    // Read items from the playlist object itself, which embeds the first page
+    // plus a `next` link. Field names depend on API era: `items` (post the
+    // March 2026 migration) or `tracks` (older responses).
     const pl = await api.spotifyGet(`/playlists/${state.partyPlaylistId}`)
     if (pl && pl.snapshot_id) state.partyPlaylistSnapshot = pl.snapshot_id
 
@@ -684,15 +686,15 @@ async function doSearch() {
   btn.disabled = true
 
   try {
-    // This setup rejects an explicit `limit` ("Invalid limit") and caps the
-    // default page at ~5 results. To gather a useful number of hits we page
-    // through the results with `offset` instead, accumulating across requests
-    // and stopping gracefully if a page errors or runs dry.
+    // Spotify's Feb 2026 dev-mode migration capped /search at limit=10 (max)
+    // and dropped the default to 5 (hence the earlier "Invalid limit" on 20).
+    // Request the new maximum of 10 per page and page through with `offset`,
+    // accumulating across requests and stopping gracefully on error/empty.
     const seen = new Set()
     const all = []
 
     const fetchPage = async (offset) => {
-      const params = new URLSearchParams({ q: query, type: 'track' })
+      const params = new URLSearchParams({ q: query, type: 'track', limit: '10' })
       if (offset > 0) params.set('offset', String(offset))
       const data = await api.spotifyGet(`https://api.spotify.com/v1/search?${params}`)
       return (data && data.tracks && data.tracks.items) || []
