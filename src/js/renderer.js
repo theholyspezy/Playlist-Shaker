@@ -668,6 +668,22 @@ async function playPartyPlaylist() {
   }
 }
 
+// Admin only: start the party playlist at a specific track (via double-click).
+async function playTrackInPlaylist(index) {
+  if (!state.isAdmin || !state.partyPlaylistId) return
+  const track = state.playlistTracks[index]
+  try {
+    await api.spotifyPut('/me/player/play', {
+      context_uri: `spotify:playlist:${state.partyPlaylistId}`,
+      offset: { position: index },
+    })
+    showToast(`▶ ${track ? track.name : 'Titel'} wird abgespielt`, 'success')
+    setTimeout(pollPlayback, 600)
+  } catch (err) {
+    handlePlaybackError(err)
+  }
+}
+
 function handlePlaybackError(err) {
   if (err.message.includes('403') || err.message.includes('Premium')) {
     showToast('⚠ Spotify Premium wird für die Wiedergabesteuerung benötigt', 'warning')
@@ -991,11 +1007,16 @@ function renderPlaylist() {
 
     if (state.isAdmin) {
       div.draggable = true
+      div.classList.add('admin-playable')
+      div.title = 'Doppelklick: sofort abspielen'
       div.addEventListener('dragstart', onDragStart)
       div.addEventListener('dragover', onDragOver)
       div.addEventListener('dragleave', onDragLeave)
       div.addEventListener('drop', onDrop)
       div.addEventListener('dragend', onDragEnd)
+
+      // Admin only: double-click a row to start the playlist at that track
+      div.addEventListener('dblclick', () => playTrackInPlaylist(index))
 
       div.querySelector('.item-btn.up').onclick = () =>
         reorderPlaylistTrack(index, index - 1)
