@@ -293,21 +293,30 @@ function startCallbackServer(resolve, reject) {
 app.whenReady().then(() => {
   loadConfig()
 
+  // Window enlarged ~10% to match the 1.1 UI zoom applied below, so the layout
+  // density stays the same while everything (incl. fonts) renders 10% larger.
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 980,
-    minHeight: 680,
+    width: 1408,
+    height: 880,
+    minWidth: 1078,
+    minHeight: 748,
     frame: false,
     backgroundColor: '#0d0d1a',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      zoomFactor: 1.1,
     },
   })
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'))
+
+  // Enforce the 10% zoom once the page is ready (zoomFactor in webPreferences
+  // can be reset on load in some Electron versions).
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.setZoomFactor(1.1)
+  })
 
   // F12 toggles the DevTools console (helps diagnose API/runtime issues)
   mainWindow.webContents.on('before-input-event', (event, input) => {
