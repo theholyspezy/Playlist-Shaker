@@ -704,6 +704,21 @@ body {
 
 .ctrl-btn:active { transform: scale(.93); }
 
+/* Admin-only (skip) buttons appear greyed out and inert for guests */
+.ctrl-btn.admin-locked {
+  opacity: .3;
+  filter: grayscale(1);
+  cursor: not-allowed;
+  color: var(--border);
+}
+.ctrl-btn.admin-locked:hover {
+  background: var(--bg3);
+  border-color: var(--border);
+  box-shadow: none;
+  color: var(--border);
+}
+.ctrl-btn.admin-locked:active { transform: none; }
+
 .play-btn {
   width: 44px;
   height: 36px;

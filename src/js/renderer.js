@@ -201,6 +201,8 @@ function bindMainApp() {
   $('prevBtn').onclick      = () => playerCommand('previous')
   $('playPauseBtn').onclick = () => togglePlayPause()
   $('nextBtn').onclick      = () => playerCommand('next')
+  // Skip buttons start locked for guests (admin-only)
+  applyAdminPlayerControls()
 
   $('volumeSlider').oninput = e => {
     const vol = e.target.value
@@ -1072,6 +1074,21 @@ async function attemptAdminLogin() {
   }
 }
 
+// Skip (prev/next) is admin-only: guests must not jump around the party
+// playlist. Grey the buttons out and disable them unless admin mode is active.
+function applyAdminPlayerControls() {
+  const adminOnly = ['prevBtn', 'nextBtn']
+  adminOnly.forEach(id => {
+    const btn = $(id)
+    if (!btn) return
+    btn.disabled = !state.isAdmin
+    btn.classList.toggle('admin-locked', !state.isAdmin)
+    btn.title = state.isAdmin
+      ? (id === 'prevBtn' ? 'Vorheriger Titel' : 'Nächster Titel')
+      : 'Nur als Admin verfügbar'
+  })
+}
+
 function enterAdminMode() {
   state.isAdmin = true
   $('adminBadge').classList.remove('hidden')
@@ -1079,6 +1096,7 @@ function enterAdminMode() {
   $('adminToggleBtn').classList.add('primary')
   $('adminToggleBtn').classList.remove('secondary')
   $('adminPlaylistControls').classList.remove('hidden')
+  applyAdminPlayerControls()
   renderPlaylist()
   showToast('👑 Admin-Modus aktiviert', 'success')
 }
@@ -1090,6 +1108,7 @@ function exitAdminMode() {
   $('adminToggleBtn').classList.remove('primary')
   $('adminToggleBtn').classList.add('secondary')
   $('adminPlaylistControls').classList.add('hidden')
+  applyAdminPlayerControls()
   renderPlaylist()
   showToast('Admin-Modus deaktiviert', 'warning')
 }
