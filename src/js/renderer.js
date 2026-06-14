@@ -776,41 +776,6 @@ function renderSearchResults(tracks) {
 }
 
 // ── Playlist Management ───────────────────────────────────
-async function postTrack(uri) {
-  const base = `/playlists/${state.partyPlaylistId}/tracks`
-
-  // Tier 1: POST with the URIs in the JSON body (the standard "append" form).
-  try {
-    const data = await api.spotifyPost(base, { uris: [uri] })
-    state.partyPlaylistSnapshot = data && data.snapshot_id
-    await loadPlaylistTracks()
-    return
-  } catch (err) {
-    if (!err.message.includes('403')) throw err
-  }
-
-  // Tier 2: POST with the URIs as a query parameter (no body). Some proxies
-  // mangle JSON bodies the same way they break the `limit` param.
-  try {
-    const data = await api.spotifyPost(`${base}?uris=${encodeURIComponent(uri)}`, null)
-    state.partyPlaylistSnapshot = data && data.snapshot_id
-    await loadPlaylistTracks()
-    return
-  } catch (err) {
-    if (!err.message.includes('403')) throw err
-  }
-
-  // Tier 3: PUT to REPLACE the playlist contents with the existing tracks plus
-  // the new one. This is a different operation than the POST "append" and can
-  // slip past an enforcement that only blocks the add endpoint. Capped at 100
-  // URIs (the API limit for a single replace call).
-  const existing = state.playlistTracks.map(t => t.uri).filter(Boolean)
-  const uris = [...existing, uri].slice(0, 100)
-  const data = await api.spotifyPut(base, { uris })
-  state.partyPlaylistSnapshot = data && data.snapshot_id
-  await loadPlaylistTracks()
-}
-
 async function addTrackToPlaylist(uri) {
   if (!state.partyPlaylistId) {
     await createPartyPlaylist()
@@ -818,39 +783,23 @@ async function addTrackToPlaylist(uri) {
   }
 
   try {
-    await postTrack(uri)
+    const data = await api.spotifyPost(
+      `/playlists/${state.partyPlaylistId}/tracks`,
+      { uris: [uri] }
+    )
+    state.partyPlaylistSnapshot = data && data.snapshot_id
+    await loadPlaylistTracks()
     showToast('🎵 Song zur Party Playlist hinzugefügt!', 'success')
     return true
   } catch (err) {
-    if (!err.message.includes('403')) {
+    if (err.message.includes('403')) {
+      // Token, scopes, ownership and TLS are all confirmed fine, and a fresh
+      // PUBLIC playlist is forbidden too — so this is a Spotify-side block, not
+      // something the code can work around. Just report it clearly.
+      await handleWriteForbidden(err)
+    } else {
       showToast('Fehler beim Hinzufügen: ' + err.message, 'error')
-      return false
     }
-
-    // 403 on write. Two known causes: the active playlist isn't owned by us, or
-    // it was created in a non-writable state by an older app version (a private
-    // playlist saved in config). Both are healed the same way: create a fresh
-    // PUBLIC playlist and retry once. Guarded to a single attempt per session so
-    // a genuine Spotify-side block doesn't spawn a new playlist on every click.
-    const owned = await isPlaylistOwnedByUser(state.partyPlaylistId)
-    console.warn('Add 403 — playlist', state.partyPlaylistId, 'owned:', owned, '| userId:', state.userId, '| healed:', state.autoHealedThisSession)
-
-    if (!state.autoHealedThisSession) {
-      state.autoHealedThisSession = true
-      showToast('Erstelle eine frische, öffentliche Party Playlist…', 'warning')
-      await createPartyPlaylist()
-      try {
-        await postTrack(uri)
-        showToast('🎵 Song zur neuen Playlist hinzugefügt!', 'success')
-        return true
-      } catch (err2) {
-        await handleWriteForbidden(err2)
-        return false
-      }
-    }
-
-    // Already healed once this session and still forbidden – it's Spotify-side.
-    await handleWriteForbidden(err)
     return false
   }
 }
