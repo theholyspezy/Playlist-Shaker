@@ -122,13 +122,20 @@ function runEqualizer() {
       const [lo, hi] = eqBinMap[EQ_BARS - 1 - i]
       let sum = 0
       for (let b = lo; b < hi; b++) sum += live[b]
-      const avg = sum / Math.max(1, hi - lo)
-      // Tilt: bass (right, t→1) is naturally loud → attenuate; treble (left,
-      // t→0) is quiet → boost. Keeps the whole spectrum lively instead of the
-      // right half sitting at the ceiling.
-      const t = i / (EQ_BARS - 1)        // 0 = left/high … 1 = right/low
-      const tilt = 1.7 - 1.25 * t
-      target = 3 + (avg / 255) * EQ_MAX_H * tilt
+      let v = (sum / Math.max(1, hi - lo)) / 255   // 0..1
+
+      // Subtract a noise floor and expand the rest. This removes the constant
+      // offset that made loud-but-steady bass sit at mid level, so the bars now
+      // swing across the full range (quiet gaps → near 0, hits → high).
+      const floor = 0.10
+      v = Math.max(0, (v - floor) / (1 - floor))
+      v = Math.pow(v, 0.85)                          // mild contrast boost
+
+      // Nearly flat tilt (slight high boost only). Bass keeps its full swing.
+      const t = i / (EQ_BARS - 1)                    // 0 left/high … 1 right/low
+      const tilt = 1.12 - 0.12 * t
+      // 0.85 gain leaves headroom so peaks don't constantly clip the ceiling.
+      target = 3 + v * (EQ_MAX_H - 3) * tilt * 0.85
     } else if (!state.isPlaying) {
       target = 3
     } else {
@@ -141,8 +148,15 @@ function runEqualizer() {
         + beat * cfg.kick
         + (Math.random() < 0.06 ? Math.random() * cfg.noise : 0)
     }
-    // Ease toward the target: snappy for live/treble, smoother bass swell/decay
-    const ease = live ? 0.55 : (state.isPlaying ? cfg.ease : 0.12)
+    // Asymmetric easing in live mode: moderate attack (rise) so peaks don't
+    // snap instantly, slow release (fall) so each hit produces a big, visible
+    // swing that decays like a VU meter. Falls back to the old easing otherwise.
+    let ease
+    if (live) {
+      ease = target > prev ? 0.45 : 0.14
+    } else {
+      ease = state.isPlaying ? cfg.ease : 0.12
+    }
     const h = Math.min(EQ_MAX_H, Math.max(3, prev + (target - prev) * ease))
     bar.style.height = h + 'px'
   })
@@ -207,7 +221,8 @@ async function initAudioAnalyser() {
     const src = eqAudioCtx.createMediaStreamSource(stream)
     const analyser = eqAudioCtx.createAnalyser()
     analyser.fftSize = 512
-    analyser.smoothingTimeConstant = 0.72
+    // Less smoothing so beats/transients punch through (more movement)
+    analyser.smoothingTimeConstant = 0.55
     src.connect(analyser)
     eqAnalyser = analyser
     eqFreqData = new Uint8Array(analyser.frequencyBinCount)
