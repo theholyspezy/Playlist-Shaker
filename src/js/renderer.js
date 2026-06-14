@@ -56,6 +56,12 @@ let eqRaf = null
 let eqClock = 0
 const EQ_BARS = 24
 const EQ_MAX_H = 48
+// Real-time system-audio analysis (Windows loopback). When available, the
+// equalizer is driven by an actual FFT instead of the simulation below.
+let eqAnalyser = null
+let eqFreqData = null
+let eqBinMap = null
+let eqAudioCtx = null
 // Spectrum layout (as requested): LEFT bars = high frequencies (fast, short,
 // flickery), RIGHT bars = low frequencies (slow, tall, with a bass "kick").
 // `f` is "bassness": 1 at the right edge (lows), 0 at the left edge (highs).
@@ -92,6 +98,14 @@ function buildEqualizer() {
 
 function runEqualizer() {
   const bars = $('equalizer').querySelectorAll('.eq-bar')
+
+  // Pull a fresh FFT snapshot if real system-audio analysis is active
+  let live = null
+  if (eqAnalyser) {
+    eqAnalyser.getByteFrequencyData(eqFreqData)
+    live = eqFreqData
+  }
+
   eqClock += state.isPlaying ? 0.05 : 0
   // Sharp periodic "kick" (simulated beat) that mostly drives the bass (right) bars
   const beat = Math.pow(Math.max(0, Math.sin(eqClock * 2.0)), 6)
@@ -100,10 +114,20 @@ function runEqualizer() {
     const cfg = eqBarCfg[i]
     const prev = parseFloat(bar.style.height) || 3
     let target
-    if (!state.isPlaying) {
+    if (live) {
+      // Real spectrum. Display layout: LEFT = high freq, RIGHT = low freq, so
+      // reverse into the low→high ordered bin map.
+      const [lo, hi] = eqBinMap[EQ_BARS - 1 - i]
+      let sum = 0
+      for (let b = lo; b < hi; b++) sum += live[b]
+      const avg = sum / Math.max(1, hi - lo)
+      // Mild boost toward the (quieter) high bands on the left so they stay lively
+      const boost = 1 + (i / EQ_BARS) * 0.6
+      target = 3 + (avg / 255) * EQ_MAX_H * 1.35 * boost
+    } else if (!state.isPlaying) {
       target = 3
     } else {
-      // Two overlapping waves per band give an irregular, music-like motion
+      // Simulation fallback: two overlapping waves per band + beat kick
       const wave =
           Math.abs(Math.sin(eqClock * cfg.speed + cfg.phase))           * 0.65
         + Math.abs(Math.sin(eqClock * cfg.speed * 1.7 + cfg.phase * 1.4)) * 0.35
@@ -112,8 +136,8 @@ function runEqualizer() {
         + beat * cfg.kick
         + (Math.random() < 0.06 ? Math.random() * cfg.noise : 0)
     }
-    // Ease toward the target: treble snaps, bass swells, all decay smoothly on pause
-    const ease = state.isPlaying ? cfg.ease : 0.12
+    // Ease toward the target: snappy for live/treble, smoother bass swell/decay
+    const ease = live ? 0.55 : (state.isPlaying ? cfg.ease : 0.12)
     const h = Math.min(EQ_MAX_H, Math.max(3, prev + (target - prev) * ease))
     bar.style.height = h + 'px'
   })
@@ -123,6 +147,69 @@ function runEqualizer() {
 
 function setEqualizerPlaying(playing) {
   // state.isPlaying is already updated before this is called — no extra work needed
+}
+
+// Map the FFT bins (index 0 = lowest freq … high index = highest freq) onto the
+// EQ_BARS, log-spaced for a natural look. Returned ranges are in low→high freq
+// order; the renderer reverses them so the LEFT bars show high frequencies.
+function buildEqBinMap(binCount) {
+  const usable = Math.max(24, Math.min(binCount - 1, 160)) // skip empty very-high bins
+  const minBin = 1
+  const ranges = []
+  for (let k = 0; k < EQ_BARS; k++) {
+    const lo = Math.floor(minBin * Math.pow(usable / minBin, k / EQ_BARS))
+    let hi = Math.floor(minBin * Math.pow(usable / minBin, (k + 1) / EQ_BARS))
+    if (hi <= lo) hi = lo + 1
+    ranges.push([lo, hi])
+  }
+  return ranges
+}
+
+// Grab the Windows system-audio output as a MediaStream. Tries the legacy
+// desktop-capture path first (works on the widest range of Electron versions),
+// then the modern getDisplayMedia loopback path. Returns null if neither works.
+async function captureSystemAudio() {
+  const attempts = [
+    () => navigator.mediaDevices.getUserMedia({
+      audio: { mandatory: { chromeMediaSource: 'desktop' } },
+      video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: 2, maxHeight: 2, maxFrameRate: 1 } },
+    }),
+    () => navigator.mediaDevices.getDisplayMedia({ audio: true, video: true }),
+  ]
+  for (const attempt of attempts) {
+    try {
+      const stream = await attempt()
+      stream.getVideoTracks().forEach(t => t.stop()) // we only need the audio
+      if (stream.getAudioTracks().length) return stream
+      stream.getTracks().forEach(t => t.stop())
+    } catch (e) {
+      console.warn('System-audio capture attempt failed:', e && e.message)
+    }
+  }
+  return null
+}
+
+async function initAudioAnalyser() {
+  if (eqAnalyser) return true
+  const stream = await captureSystemAudio()
+  if (!stream) return false
+  try {
+    eqAudioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    eqAudioCtx.resume().catch(() => {})
+    const src = eqAudioCtx.createMediaStreamSource(stream)
+    const analyser = eqAudioCtx.createAnalyser()
+    analyser.fftSize = 512
+    analyser.smoothingTimeConstant = 0.72
+    src.connect(analyser)
+    eqAnalyser = analyser
+    eqFreqData = new Uint8Array(analyser.frequencyBinCount)
+    eqBinMap = buildEqBinMap(analyser.frequencyBinCount)
+    showToast('🎚 Live-Audioanalyse aktiv (System-Sound)', 'success')
+    return true
+  } catch (e) {
+    console.warn('AnalyserNode setup failed:', e && e.message)
+    return false
+  }
 }
 
 // ── Window Controls ───────────────────────────────────────
@@ -200,6 +287,15 @@ async function startMainApp() {
   await loadUserProfile()
   await loadOrCreatePartyPlaylist()
   startPolling()
+
+  // Drive the equalizer from real system audio (Windows loopback). Capture may
+  // require a user gesture, so retry on the first click if the initial try fails.
+  if (!(await initAudioAnalyser())) {
+    const retry = async () => {
+      if (await initAudioAnalyser()) document.removeEventListener('click', retry)
+    }
+    document.addEventListener('click', retry)
+  }
 }
 
 function bindMainApp() {

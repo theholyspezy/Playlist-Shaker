@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, session, desktopCapturer } = require('electron')
 const path = require('path')
 const http = require('http')
 const https = require('https')
@@ -316,6 +316,26 @@ app.whenReady().then(() => {
   // can be reset on load in some Electron versions).
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow.webContents.setZoomFactor(1.1)
+  })
+
+  // Allow the renderer to capture system audio (loopback) for the real-time
+  // equalizer. Used by getDisplayMedia on newer Electron; older Electron uses
+  // the legacy getUserMedia desktop path which needs no handler. Wrapped so an
+  // unsupported signature can never crash startup.
+  try {
+    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+      desktopCapturer.getSources({ types: ['screen'] })
+        .then((sources) => callback({ video: sources[0], audio: 'loopback' }))
+        .catch(() => { try { callback({}) } catch { /* ignore */ } })
+    })
+  } catch (err) {
+    console.warn('setDisplayMediaRequestHandler unavailable:', err.message)
+  }
+
+  // Grant permissions to our own trusted local UI so the loopback audio
+  // capture for the equalizer isn't silently blocked.
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => {
+    callback(true)
   })
 
   // F12 toggles the DevTools console (helps diagnose API/runtime issues)
