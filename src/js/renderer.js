@@ -775,12 +775,28 @@ function renderSearchResults(tracks) {
 
 // ── Playlist Management ───────────────────────────────────
 async function postTrack(uri) {
-  const data = await api.spotifyPost(
-    `/playlists/${state.partyPlaylistId}/tracks`,
-    { uris: [uri] }
-  )
-  state.partyPlaylistSnapshot = data.snapshot_id
-  await loadPlaylistTracks()
+  // Primary form: track URIs in the JSON body.
+  try {
+    const data = await api.spotifyPost(
+      `/playlists/${state.partyPlaylistId}/tracks`,
+      { uris: [uri] }
+    )
+    state.partyPlaylistSnapshot = data && data.snapshot_id
+    await loadPlaylistTracks()
+    return
+  } catch (err) {
+    if (!err.message.includes('403')) throw err
+    // Fallback: Spotify also accepts the URIs as a query parameter with no body.
+    // Some proxies/filters in this environment mangle JSON bodies on this
+    // endpoint (the same kind of interference that breaks the `limit` param),
+    // so the query-string form can slip through where the body form is blocked.
+    const data = await api.spotifyPost(
+      `/playlists/${state.partyPlaylistId}/tracks?uris=${encodeURIComponent(uri)}`,
+      null
+    )
+    state.partyPlaylistSnapshot = data && data.snapshot_id
+    await loadPlaylistTracks()
+  }
 }
 
 async function addTrackToPlaylist(uri) {
@@ -842,14 +858,25 @@ async function handleWriteForbidden(err) {
   const legitIssuers = ['DigiCert', 'Amazon', 'GlobalSign', 'Lets Encrypt', 'Let\'s Encrypt']
   const tlsClean = legitIssuers.some(ca => issuer.includes(ca))
 
+  const hasModify = typeof scopes === 'string' &&
+    (scopes.includes('playlist-modify-public') || scopes.includes('playlist-modify-private'))
+
   if (!tlsClean && issuer !== '?') {
     // Suspicious issuer: antivirus/proxy is likely intercepting HTTPS
     showToast(`403 + verdächtiger TLS-Aussteller: ${issuer}. Antivirus oder Proxy blockiert möglicherweise die Verbindung zu Spotify.`, 'error', 14000)
-  } else {
-    // TLS is fine (DigiCert = echtes Spotify-Zertifikat). 403 kommt direkt von Spotify.
-    // Häufigste Ursache: App im "Development Mode" ohne User Management-Eintrag.
+  } else if (!hasModify) {
+    // The modify scopes weren't actually granted — re-login is the fix.
     showToast(
-      '403: Spotify verweigert Schreibzugriff. Lösung: developer.spotify.com → deine App → Settings → User Management → deine Spotify-E-Mail hinzufügen. Danach hier LOGOUT + neu einloggen.',
+      `403: Schreib-Berechtigung fehlt im Token. Erteilte Rechte: ${scopes || '(keine)'} — bitte LOGOUT + neu einloggen und im Spotify-Dialog alles bestätigen.`,
+      'error',
+      16000
+    )
+  } else {
+    // Scopes are present and TLS is fine (DigiCert = echtes Spotify-Zertifikat).
+    // 403 kommt direkt von Spotify — häufigste Ursache: App im "Development Mode"
+    // ohne User-Management-Eintrag.
+    showToast(
+      '403: Rechte sind vorhanden, Spotify verweigert trotzdem. Lösung: developer.spotify.com → deine App → Settings → User Management → deine Spotify-E-Mail hinzufügen. Danach LOGOUT + neu einloggen.',
       'error',
       16000
     )
