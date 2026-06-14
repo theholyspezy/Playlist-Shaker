@@ -671,9 +671,7 @@ async function doSearch() {
   btn.disabled = true
 
   try {
-    // No 'limit' param: this Spotify setup rejects it with "Invalid limit".
-    // Spotify defaults to 20 results, which meets the minimum we need.
-    const params = new URLSearchParams({ q: query, type: 'track' })
+    const params = new URLSearchParams({ q: query, type: 'track', limit: '20' })
     const data = await api.spotifyGet(`https://api.spotify.com/v1/search?${params}`)
     renderSearchResults((data.tracks && data.tracks.items) || [])
   } catch (err) {
@@ -800,11 +798,23 @@ async function isPlaylistOwnedByUser(playlistId) {
 async function handleWriteForbidden(err) {
   const scopes = await api.getConfig('grantedScopes')
   console.warn('Write forbidden. Granted scopes:', scopes, '| error:', err && err.message)
-  // The error message includes the TLS issuer – surface it, since a non-public
-  // issuer means an antivirus/proxy is intercepting (and breaking) the HTTPS.
   const tlsMatch = err && err.message ? err.message.match(/\[TLS-Aussteller: ([^\]]+)\]/) : null
   const issuer = tlsMatch ? tlsMatch[1] : '?'
-  showToast(`403 trotz eigener Playlist & voller Rechte. TLS-Aussteller der Verbindung: ${issuer} — ist das NICHT Spotify/DigiCert, blockiert dein Antivirus/Proxy die Verbindung.`, 'error', 12000)
+  const legitIssuers = ['DigiCert', 'Amazon', 'GlobalSign', 'Lets Encrypt', 'Let\'s Encrypt']
+  const tlsClean = legitIssuers.some(ca => issuer.includes(ca))
+
+  if (!tlsClean && issuer !== '?') {
+    // Suspicious issuer: antivirus/proxy is likely intercepting HTTPS
+    showToast(`403 + verdächtiger TLS-Aussteller: ${issuer}. Antivirus oder Proxy blockiert möglicherweise die Verbindung zu Spotify.`, 'error', 14000)
+  } else {
+    // TLS is fine (DigiCert = echtes Spotify-Zertifikat). 403 kommt direkt von Spotify.
+    // Häufigste Ursache: App im "Development Mode" ohne User Management-Eintrag.
+    showToast(
+      '403: Spotify verweigert Schreibzugriff. Lösung: developer.spotify.com → deine App → Settings → User Management → deine Spotify-E-Mail hinzufügen. Danach hier LOGOUT + neu einloggen.',
+      'error',
+      16000
+    )
+  }
 }
 
 async function removeTrackFromPlaylist(uri, index) {
