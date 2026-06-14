@@ -68,6 +68,11 @@ async function spotifyRequest(method, endpoint, body = null) {
     const headers = {
       'Authorization': `Bearer ${token}`,
       'Accept': 'application/json',
+      // Send a real browser-like User-Agent. Node's https.request otherwise
+      // sends none, which some WAF/edge layers flag — and they tend to be
+      // stricter on write endpoints (a bare "403 Forbidden" with no detail is
+      // a classic WAF signature, unlike Spotify's usual descriptive errors).
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PartyShaker/1.0',
     }
 
     let bodyData = null
