@@ -671,9 +671,48 @@ async function doSearch() {
   btn.disabled = true
 
   try {
-    const params = new URLSearchParams({ q: query, type: 'track', limit: '20' })
-    const data = await api.spotifyGet(`https://api.spotify.com/v1/search?${params}`)
-    renderSearchResults((data.tracks && data.tracks.items) || [])
+    // This setup rejects an explicit `limit` ("Invalid limit") and caps the
+    // default page at ~5 results. To gather a useful number of hits we page
+    // through the results with `offset` instead, accumulating across requests
+    // and stopping gracefully if a page errors or runs dry.
+    const seen = new Set()
+    const all = []
+
+    const fetchPage = async (offset) => {
+      const params = new URLSearchParams({ q: query, type: 'track' })
+      if (offset > 0) params.set('offset', String(offset))
+      const data = await api.spotifyGet(`https://api.spotify.com/v1/search?${params}`)
+      return (data && data.tracks && data.tracks.items) || []
+    }
+
+    // First page is the one we know always works (no extra params).
+    const firstPage = await fetchPage(0)
+    for (const t of firstPage) {
+      if (t && t.uri && !seen.has(t.uri)) { seen.add(t.uri); all.push(t) }
+    }
+
+    // Try to pull more via offset. Page size is whatever the first page gave us
+    // (typically ~5). Keep going until we have enough or a page fails/repeats.
+    const pageSize = firstPage.length || 5
+    const TARGET = 25
+    let offset = pageSize
+    while (all.length < TARGET && offset < 200) {
+      let page
+      try {
+        page = await fetchPage(offset)
+      } catch {
+        break // offset rejected too — keep what we have
+      }
+      if (!page.length) break
+      let added = 0
+      for (const t of page) {
+        if (t && t.uri && !seen.has(t.uri)) { seen.add(t.uri); all.push(t); added++ }
+      }
+      if (added === 0) break // no new tracks — stop to avoid looping
+      offset += page.length
+    }
+
+    renderSearchResults(all)
   } catch (err) {
     showToast('Suche fehlgeschlagen: ' + err.message, 'error')
   } finally {
