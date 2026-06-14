@@ -12,7 +12,9 @@ const state = {
   partyPlaylistSnapshot: null,
   playlistTracks: [],
   currentTrackUri: null,
+  currentDurationMs: 0,
   isPlaying: false,
+  isSeeking: false,
   pollingTimer: null,
   volumeThrottle: null,
   dragSrcIndex: null,
@@ -121,9 +123,12 @@ function runEqualizer() {
       let sum = 0
       for (let b = lo; b < hi; b++) sum += live[b]
       const avg = sum / Math.max(1, hi - lo)
-      // Mild boost toward the (quieter) high bands on the left so they stay lively
-      const boost = 1 + (i / EQ_BARS) * 0.6
-      target = 3 + (avg / 255) * EQ_MAX_H * 1.35 * boost
+      // Tilt: bass (right, t→1) is naturally loud → attenuate; treble (left,
+      // t→0) is quiet → boost. Keeps the whole spectrum lively instead of the
+      // right half sitting at the ceiling.
+      const t = i / (EQ_BARS - 1)        // 0 = left/high … 1 = right/low
+      const tilt = 1.7 - 1.25 * t
+      target = 3 + (avg / 255) * EQ_MAX_H * tilt
     } else if (!state.isPlaying) {
       target = 3
     } else {
@@ -153,8 +158,11 @@ function setEqualizerPlaying(playing) {
 // EQ_BARS, log-spaced for a natural look. Returned ranges are in low→high freq
 // order; the renderer reverses them so the LEFT bars show high frequencies.
 function buildEqBinMap(binCount) {
-  const usable = Math.max(24, Math.min(binCount - 1, 160)) // skip empty very-high bins
-  const minBin = 1
+  // Focus on the musically important range. With fftSize 512 each bin is ~94 Hz,
+  // so ~90 bins ≈ 8.5 kHz. Start at bin 2 to skip the loudest sub-bass rumble
+  // that otherwise pins the low-frequency bars to the top.
+  const usable = Math.max(24, Math.min(binCount - 1, 90))
+  const minBin = 2
   const ranges = []
   for (let k = 0; k < EQ_BARS; k++) {
     const lo = Math.floor(minBin * Math.pow(usable / minBin, k / EQ_BARS))
@@ -303,6 +311,7 @@ function bindMainApp() {
   $('prevBtn').onclick      = () => playerCommand('previous')
   $('playPauseBtn').onclick = () => togglePlayPause()
   $('nextBtn').onclick      = () => playerCommand('next')
+  bindSeekBar()
   // Skip buttons start locked for guests (admin-only)
   applyAdminPlayerControls()
 
@@ -683,9 +692,13 @@ function updatePlayerDisplay(data) {
   // Times
   const cur = data.progress_ms || 0
   const dur = track.duration_ms || 1
+  state.currentDurationMs = dur
   $('lcdCurrentTime').textContent = formatMs(cur)
   $('lcdTotalTime').textContent = formatMs(dur)
-  $('lcdTimeFill').style.width = `${(cur / dur * 100).toFixed(1)}%`
+  // Don't fight the user while they're dragging the seek handle
+  if (!state.isSeeking) {
+    $('lcdTimeFill').style.width = `${(cur / dur * 100).toFixed(1)}%`
+  }
 
   // Play/pause button
   $('playPauseBtn').textContent = isPlaying ? '⏸' : '▶'
@@ -754,6 +767,18 @@ async function setVolume(vol) {
     await api.spotifyPut(`/me/player/volume?volume_percent=${vol}`, null)
   } catch {
     // Silently ignore volume errors (no active device)
+  }
+}
+
+// Admin: seek to a fraction (0..1) of the current track via the progress bar
+async function seekToFraction(frac) {
+  if (!state.isAdmin || !state.currentDurationMs) return
+  const ms = Math.round(Math.max(0, Math.min(1, frac)) * state.currentDurationMs)
+  try {
+    await api.spotifyPut(`/me/player/seek?position_ms=${ms}`, null)
+    setTimeout(pollPlayback, 500)
+  } catch (err) {
+    handlePlaybackError(err)
   }
 }
 
@@ -1220,6 +1245,47 @@ function applyAdminPlayerControls() {
     btn.title = state.isAdmin
       ? (id === 'prevBtn' ? 'Vorheriger Titel' : 'Nächster Titel')
       : 'Nur als Admin verfügbar'
+  })
+  // Progress bar is draggable (seek) only for admins
+  const seekBar = $('lcdTimeBar')
+  if (seekBar) {
+    seekBar.classList.toggle('admin-seekable', state.isAdmin)
+    seekBar.title = state.isAdmin ? 'Ziehen zum Vor-/Zurückspulen' : ''
+  }
+}
+
+// Drag/click the progress bar to seek (admin only)
+function bindSeekBar() {
+  const bar = $('lcdTimeBar')
+  if (!bar) return
+  let dragging = false
+
+  const fracFromEvent = (e) => {
+    const rect = bar.getBoundingClientRect()
+    const frac = (e.clientX - rect.left) / rect.width
+    return Math.max(0, Math.min(1, frac))
+  }
+  const paint = (frac) => { $('lcdTimeFill').style.width = (frac * 100) + '%' }
+
+  bar.addEventListener('pointerdown', (e) => {
+    if (!state.isAdmin || !state.currentDurationMs) return
+    dragging = true
+    state.isSeeking = true
+    try { bar.setPointerCapture(e.pointerId) } catch { /* ignore */ }
+    paint(fracFromEvent(e))
+  })
+  bar.addEventListener('pointermove', (e) => {
+    if (!dragging) return
+    paint(fracFromEvent(e))
+  })
+  bar.addEventListener('pointerup', async (e) => {
+    if (!dragging) return
+    dragging = false
+    const frac = fracFromEvent(e)
+    paint(frac)
+    try { bar.releasePointerCapture(e.pointerId) } catch { /* ignore */ }
+    await seekToFraction(frac)
+    state.isSeeking = false
   })
 }
 

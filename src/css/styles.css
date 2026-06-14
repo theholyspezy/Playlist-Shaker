@@ -641,6 +641,7 @@ body {
   background: #0a1a0a;
   border-radius: 2px;
   overflow: hidden;
+  position: relative;
 }
 
 .lcd-time-fill {
@@ -649,6 +650,35 @@ body {
   box-shadow: 0 0 6px var(--green);
   transition: width .5s linear;
   border-radius: 2px;
+  position: relative;
+}
+
+/* Admin: draggable progress bar (seek) */
+.lcd-time-bar.admin-seekable {
+  overflow: visible;
+  cursor: pointer;
+  height: 6px;
+}
+.lcd-time-bar.admin-seekable .lcd-time-fill { transition: none; }
+/* Enlarged invisible grab area so the thin bar is easy to hit/drag */
+.lcd-time-bar.admin-seekable::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: -9px; bottom: -9px;
+}
+.lcd-seek-handle { display: none; }
+.lcd-time-bar.admin-seekable .lcd-seek-handle {
+  display: block;
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan);
+  pointer-events: none;
 }
 
 /* Equalizer */
