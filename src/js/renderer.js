@@ -880,17 +880,32 @@ async function handleWriteForbidden(err) {
   }
 }
 
+// Replace the whole playlist contents with `uris` via PUT (the same /items
+// endpoint that reordering uses). This avoids the ambiguous DELETE request-body
+// format after the 2026 migration. Handles >100 items by appending the rest
+// with POST. Passing [] empties the playlist.
+async function replacePlaylistItems(uris) {
+  const put = await api.spotifyPut(
+    `/playlists/${state.partyPlaylistId}/items`,
+    { uris: uris.slice(0, 100) }
+  )
+  if (put && put.snapshot_id) state.partyPlaylistSnapshot = put.snapshot_id
+  for (let i = 100; i < uris.length; i += 100) {
+    const post = await api.spotifyPost(
+      `/playlists/${state.partyPlaylistId}/items`,
+      { uris: uris.slice(i, i + 100) }
+    )
+    if (post && post.snapshot_id) state.partyPlaylistSnapshot = post.snapshot_id
+  }
+}
+
 async function removeTrackFromPlaylist(uri, index) {
   if (!state.partyPlaylistId) return
   try {
-    const data = await api.spotifyDelete(
-      `/playlists/${state.partyPlaylistId}/items`,
-      {
-        tracks: [{ uri }],
-        snapshot_id: state.partyPlaylistSnapshot,
-      }
-    )
-    state.partyPlaylistSnapshot = data.snapshot_id
+    const remaining = state.playlistTracks
+      .filter((_, i) => i !== index)
+      .map(t => t.uri)
+    await replacePlaylistItems(remaining)
     state.playlistTracks.splice(index, 1)
     renderPlaylist()
     showToast('Song entfernt', 'success')
@@ -936,11 +951,7 @@ async function clearPartyPlaylist() {
   if (!confirm('Alle Songs aus der Party Playlist löschen?')) return
 
   try {
-    const tracks = state.playlistTracks.map(t => ({ uri: t.uri }))
-    await api.spotifyDelete(
-      `/playlists/${state.partyPlaylistId}/items`,
-      { tracks, snapshot_id: state.partyPlaylistSnapshot }
-    )
+    await replacePlaylistItems([])
     state.playlistTracks = []
     renderPlaylist()
     showToast('🗑 Playlist geleert', 'warning')
